@@ -3,7 +3,7 @@ import { Cuestionario } from "../types/cuestionario";
 export const cuestionarioData: Cuestionario = {
   id_cuestionario: "PSY-CRED-V23-ARG",
   version: "v23",
-  title: "Cuestionario de Evaluación Psicométrica Completo",
+  title: "Descubriendo Oportunidades Juntos",
   description: "Cuestionario de 54 preguntas psicométricas y demográficas para evaluación de riesgo crediticio.",
   total_questions: 54,
   creado_por: "Equipo de Riesgo",

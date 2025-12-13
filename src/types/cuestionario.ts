@@ -21,3 +21,21 @@ export interface Cuestionario {
   status: string;
   questions: Question[];
 }
+
+export interface AnswerMetrics {
+  question_number: number;
+  selected_option: string;
+  time_to_answer_ms: number;
+  changed_answer: boolean;
+  change_count: number;
+}
+
+export interface CuestionarioResponse {
+  response_id: string;
+  cuestionario_id: string;
+  cuestionario_version: string;
+  started_at: string;
+  finished_at: string;
+  total_time_ms: number;
+  answers: AnswerMetrics[];
+}
