@@ -7,10 +7,48 @@ import {
   GetCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
+import {
+  SecretsManagerClient,
+  GetSecretValueCommand,
+} from '@aws-sdk/client-secrets-manager';
 import { timingSafeEqual } from 'crypto';
 
 const dynamodbClient = new DynamoDBClient({});
 const dynamodb = DynamoDBDocumentClient.from(dynamodbClient);
+const secretsClient = new SecretsManagerClient({});
+
+// Cache the API key to avoid fetching from Secrets Manager on every request
+let cachedApiKey: string | null = null;
+let cacheExpiry = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function getApiKey(): Promise<string> {
+  const now = Date.now();
+
+  // Return cached value if still valid
+  if (cachedApiKey && cacheExpiry > now) {
+    return cachedApiKey;
+  }
+
+  const secretArn = process.env.API_KEY_SECRET_ARN;
+  if (!secretArn) {
+    throw new Error('API_KEY_SECRET_ARN not configured');
+  }
+
+  const result = await secretsClient.send(
+    new GetSecretValueCommand({ SecretId: secretArn })
+  );
+
+  if (!result.SecretString) {
+    throw new Error('Secret value is empty');
+  }
+
+  const secret = JSON.parse(result.SecretString);
+  cachedApiKey = secret.apiKey;
+  cacheExpiry = now + CACHE_TTL_MS;
+
+  return cachedApiKey!;
+}
 
 // ============ SECURITY: Rate Limiting ============
 const RATE_LIMIT = 100; // requests per minute per API key
@@ -79,22 +117,30 @@ interface FunctionUrlEvent {
 }
 
 // ============ SECURITY: Timing-Safe API Key Validation ============
-function validateApiKey(event: FunctionUrlEvent): boolean {
+async function validateApiKey(event: FunctionUrlEvent): Promise<boolean> {
   const apiKey = event.headers['x-api-key'] || event.headers['X-Api-Key'] || '';
-  const expectedKey = process.env.EXTERNAL_API_KEY || '';
 
-  if (!apiKey || !expectedKey) {
-    return false;
-  }
-
-  // Prevent timing attacks by using constant-time comparison
-  if (apiKey.length !== expectedKey.length) {
+  if (!apiKey) {
     return false;
   }
 
   try {
+    const expectedKey = await getApiKey();
+
+    if (!expectedKey) {
+      return false;
+    }
+
+    // Prevent timing attacks by using constant-time comparison
+    if (apiKey.length !== expectedKey.length) {
+      return false;
+    }
+
     return timingSafeEqual(Buffer.from(apiKey), Buffer.from(expectedKey));
-  } catch {
+  } catch (error) {
+    log('ERROR', 'Failed to validate API key', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
     return false;
   }
 }
@@ -120,8 +166,8 @@ export const handler: Handler<FunctionUrlEvent, LambdaResponse> = async (event) 
     return response(200, {});
   }
 
-  // SECURITY: Validate API Key
-  if (!validateApiKey(event)) {
+  // SECURITY: Validate API Key (now async)
+  if (!(await validateApiKey(event))) {
     log('AUDIT', 'Authentication failed', { path, method });
     return response(401, { error: 'Unauthorized', message: 'Invalid or missing API key' });
   }
