@@ -4,6 +4,7 @@ import time
 import hmac
 import boto3
 from datetime import datetime
+from decimal import Decimal
 
 
 # Initialize AWS clients
@@ -31,11 +32,22 @@ def get_cors_headers():
     }
 
 
+class DecimalEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles Decimal types from DynamoDB"""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            # Convert to int if it's a whole number, otherwise float
+            if obj % 1 == 0:
+                return int(obj)
+            return float(obj)
+        return super().default(obj)
+
+
 def response(status_code, body):
     return {
         'statusCode': status_code,
         'headers': get_cors_headers(),
-        'body': json.dumps(body)
+        'body': json.dumps(body, cls=DecimalEncoder)
     }
 
 
