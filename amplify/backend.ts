@@ -1,36 +1,25 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
-import { FunctionUrlAuthType, HttpMethod, Runtime } from 'aws-cdk-lib/aws-lambda';
+import { responsesApi } from './functions/responses-api/resource';
+import { FunctionUrlAuthType, HttpMethod } from 'aws-cdk-lib/aws-lambda';
 import { Duration } from 'aws-cdk-lib';
-import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 
 const backend = defineBackend({
   auth,
   data,
+  responsesApi,
 });
 
-// Create the responses API Lambda using NodejsFunction for proper bundling
-const responsesApiLambda = new NodejsFunction(backend.stack, 'ResponsesApiFunction', {
-  functionName: 'responses-api',
-  entry: new URL('./functions/responses-api/handler.ts', import.meta.url).pathname,
-  handler: 'handler',
-  runtime: Runtime.NODEJS_20_X,
-  timeout: Duration.seconds(30),
-  bundling: {
-    externalModules: [
-      '@aws-sdk/client-dynamodb',
-      '@aws-sdk/lib-dynamodb',
-      '@aws-sdk/client-secrets-manager',
-    ],
-  },
-});
+// Get the Lambda function from Amplify's defineFunction
+const responsesApiLambda = backend.responsesApi.resources.lambda;
 
+// Add function URL
 const functionUrl = responsesApiLambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE, // API Key validation is done in the handler
   cors: {
-    allowedOrigins: ['*'], // Lambda handler validates API key for security
+    allowedOrigins: ['*'],
     allowedHeaders: ['Content-Type', 'x-api-key', 'X-Api-Key'],
     allowedMethods: [HttpMethod.GET, HttpMethod.POST, HttpMethod.OPTIONS],
     maxAge: Duration.hours(24),
