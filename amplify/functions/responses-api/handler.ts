@@ -252,7 +252,7 @@ async function listPendingResponses(): Promise<LambdaResponse> {
   }
 
   // Map to external format (hide internal details)
-  const responses = (result.Items || []).map(item => ({
+  const responses = (result.Items || []).map((item: Record<string, unknown>) => ({
     id: item.id,
     tokenId: item.tokenId,
     cuestionarioId: item.cuestionarioId,
@@ -286,7 +286,7 @@ async function listAllResponses(): Promise<LambdaResponse> {
   );
 
   // Map to external format
-  const responses = (result.Items || []).map(item => ({
+  const responses = (result.Items || []).map((item: Record<string, unknown>) => ({
     id: item.id,
     tokenId: item.tokenId,
     cuestionarioId: item.cuestionarioId,

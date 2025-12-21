@@ -27,6 +27,20 @@ HEADERS = {
 - **API Key**: Debe enviarse en el header `x-api-key` (case-insensitive)
 - **HTTPS**: Todas las conexiones deben usar HTTPS
 - **Almacenamiento seguro**: Nunca hardcodear la API key en el código
+- **Secrets Manager**: La API key se almacena en AWS Secrets Manager (`cuestionario/external-api-key`)
+
+## Obtener la API Key
+
+La API key se genera automáticamente en AWS Secrets Manager durante el deploy:
+
+```bash
+# Obtener la API key desde Secrets Manager
+aws secretsmanager get-secret-value \
+  --secret-id cuestionario/external-api-key \
+  --query SecretString --output text | jq -r '.apiKey'
+```
+
+O desde la consola de AWS: Secrets Manager → `cuestionario/external-api-key` → Retrieve secret value
 
 ## Endpoints Disponibles
 
@@ -95,9 +109,11 @@ pendientes = listar_respuestas_pendientes()
 for resp in pendientes:
     print(f"ID: {resp['id']}")
     print(f"  Token: {resp['tokenId']}")
-    print(f"  Cuestionario: {resp['cuestionarioId']}")
-    print(f"  Enviado: {resp['submittedAt']}")
-    print(f"  S3 Path: {resp['s3Path']}")
+    print(f"  Cuestionario: {resp['cuestionarioId']} v{resp['cuestionarioVersion']}")
+    print(f"  Título: {resp['cuestionarioTitle']}")
+    print(f"  Iniciado: {resp['startedAt']}")
+    print(f"  Finalizado: {resp['finishedAt']}")
+    print(f"  Tiempo total: {resp['totalTimeMs']}ms")
     print()
 ```
 
@@ -109,7 +125,7 @@ def descargar_respuesta(response_id: str) -> Dict[str, Any]:
     Descarga una respuesta específica y la marca automáticamente como descargada.
 
     Args:
-        response_id: ID del registro de descarga (no el tokenId)
+        response_id: ID de la respuesta (UUID generado por DynamoDB)
 
     Returns:
         Diccionario con la respuesta completa del cuestionario
@@ -128,9 +144,9 @@ def descargar_respuesta(response_id: str) -> Dict[str, Any]:
 
 
 # Ejemplo de uso
-respuesta = descargar_respuesta("abc123-def456")
+respuesta = descargar_respuesta("abc123-def456-ghi789")
 print(f"Token ID: {respuesta['tokenId']}")
-print(f"Cuestionario: {respuesta['cuestionario']['title']}")
+print(f"Cuestionario: {respuesta['cuestionarioTitle']}")
 print(f"Tiempo total: {respuesta['totalTimeMs']}ms")
 print(f"Tiempo ajustado: {respuesta['totalTimeAdjustedMs']}ms")
 
@@ -177,7 +193,7 @@ def desmarcar_respuesta(response_id: str) -> bool:
     Útil para testing o reprocesamiento.
 
     Args:
-        response_id: ID del registro de descarga
+        response_id: ID de la respuesta
 
     Returns:
         True si se desmarcó correctamente
@@ -196,7 +212,7 @@ def desmarcar_respuesta(response_id: str) -> bool:
 
 
 # Ejemplo de uso
-desmarcar_respuesta("abc123-def456")
+desmarcar_respuesta("abc123-def456-ghi789")
 ```
 
 ---
@@ -213,27 +229,29 @@ from datetime import datetime
 @dataclass
 class RespuestaCuestionario:
     """Representa una respuesta de cuestionario descargada."""
+    id: str
     token_id: str
-    submitted_at: datetime
     started_at: datetime
     finished_at: datetime
     total_time_ms: int
     total_time_adjusted_ms: int
     cuestionario_id: str
+    cuestionario_version: str
     cuestionario_title: str
     answers: List[Dict[str, Any]]
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'RespuestaCuestionario':
+    def from_dict(cls, response_id: str, data: Dict[str, Any]) -> 'RespuestaCuestionario':
         return cls(
+            id=response_id,
             token_id=data['tokenId'],
-            submitted_at=datetime.fromisoformat(data['submittedAt'].replace('Z', '+00:00')),
             started_at=datetime.fromisoformat(data['startedAt'].replace('Z', '+00:00')),
             finished_at=datetime.fromisoformat(data['finishedAt'].replace('Z', '+00:00')),
             total_time_ms=data['totalTimeMs'],
             total_time_adjusted_ms=data['totalTimeAdjustedMs'],
-            cuestionario_id=data['cuestionario']['id'],
-            cuestionario_title=data['cuestionario']['title'],
+            cuestionario_id=data['cuestionarioId'],
+            cuestionario_version=data['cuestionarioVersion'],
+            cuestionario_title=data['cuestionarioTitle'],
             answers=data['answers']
         )
 
@@ -285,7 +303,7 @@ class CuestionarioAPIClient:
     def descargar(self, response_id: str) -> RespuestaCuestionario:
         """Descarga una respuesta y la marca como descargada."""
         data = self._request("GET", f"/responses/{response_id}/download")
-        return RespuestaCuestionario.from_dict(data['response'])
+        return RespuestaCuestionario.from_dict(data['id'], data['response'])
 
     def desmarcar(self, response_id: str) -> bool:
         """Desmarca una respuesta para permitir re-descarga."""
@@ -341,8 +359,9 @@ if __name__ == "__main__":
 
     for resp in respuestas:
         print(f"\n{'='*50}")
+        print(f"ID: {resp.id}")
         print(f"Token: {resp.token_id}")
-        print(f"Cuestionario: {resp.cuestionario_title}")
+        print(f"Cuestionario: {resp.cuestionario_title} (v{resp.cuestionario_version})")
         print(f"Tiempo total: {resp.total_time_ms / 1000:.1f}s")
         print(f"Tiempo ajustado: {resp.total_time_adjusted_ms / 1000:.1f}s")
         print(f"\nRespuestas ({len(resp.answers)}):")
@@ -357,46 +376,71 @@ if __name__ == "__main__":
 
 ## Estructura de la Respuesta JSON
 
+### Listado de Respuestas (`/responses/pending` o `/responses/all`)
+
 ```json
 {
-  "tokenId": "abc123-def456-...",
-  "submittedAt": "2024-01-15T10:30:00.000Z",
-  "startedAt": "2024-01-15T10:25:00.000Z",
-  "finishedAt": "2024-01-15T10:30:00.000Z",
-  "totalTimeMs": 300000,
-  "totalTimeAdjustedMs": 280000,
-  "cuestionario": {
-    "id": "cuestionario-v1",
-    "version": "1.0",
-    "title": "Cuestionario de Ejemplo",
-    "description": "Descripción del cuestionario",
-    "total_questions": 50,
-    "creado_por": "Admin"
-  },
-  "answers": [
+  "count": 5,
+  "responses": [
     {
-      "question_number": 1,
-      "question_text": "¿Cuál es tu color favorito?",
-      "selected_option_key": "A",
-      "selected_option_text": "A. Rojo",
-      "time_to_answer_ms": 5000,
-      "time_adjusted_ms": 5000,
-      "changed_answer": false,
-      "change_count": 0,
-      "had_badge_popup": false
-    },
-    {
-      "question_number": 11,
-      "question_text": "...",
-      "selected_option_key": "B",
-      "selected_option_text": "B. ...",
-      "time_to_answer_ms": 8000,
-      "time_adjusted_ms": 4000,
-      "changed_answer": true,
-      "change_count": 1,
-      "had_badge_popup": true
+      "id": "abc123-def456-ghi789",
+      "tokenId": "token-uuid-here",
+      "cuestionarioId": "cuestionario-v1",
+      "cuestionarioVersion": "1.0",
+      "cuestionarioTitle": "Cuestionario de Ejemplo",
+      "startedAt": "2024-01-15T10:25:00.000Z",
+      "finishedAt": "2024-01-15T10:30:00.000Z",
+      "totalTimeMs": 300000,
+      "totalTimeAdjustedMs": 280000,
+      "status": "completed",
+      "downloadStatus": "pending",
+      "createdAt": "2024-01-15T10:30:00.000Z"
     }
   ]
+}
+```
+
+### Descarga de Respuesta (`/responses/{id}/download`)
+
+```json
+{
+  "id": "abc123-def456-ghi789",
+  "downloadedAt": "2024-01-15T12:00:00.000Z",
+  "response": {
+    "tokenId": "token-uuid-here",
+    "cuestionarioId": "cuestionario-v1",
+    "cuestionarioVersion": "1.0",
+    "cuestionarioTitle": "Cuestionario de Ejemplo",
+    "startedAt": "2024-01-15T10:25:00.000Z",
+    "finishedAt": "2024-01-15T10:30:00.000Z",
+    "totalTimeMs": 300000,
+    "totalTimeAdjustedMs": 280000,
+    "status": "completed",
+    "answers": [
+      {
+        "question_number": 1,
+        "question_text": "¿Cuál es tu color favorito?",
+        "selected_option_key": "A",
+        "selected_option_text": "A. Rojo",
+        "time_to_answer_ms": 5000,
+        "time_adjusted_ms": 5000,
+        "changed_answer": false,
+        "change_count": 0,
+        "had_badge_popup": false
+      },
+      {
+        "question_number": 11,
+        "question_text": "...",
+        "selected_option_key": "B",
+        "selected_option_text": "B. ...",
+        "time_to_answer_ms": 8000,
+        "time_adjusted_ms": 4000,
+        "changed_answer": true,
+        "change_count": 1,
+        "had_badge_popup": true
+      }
+    ]
+  }
 }
 ```
 
@@ -406,15 +450,16 @@ if __name__ == "__main__":
 
 1. **Tiempo Ajustado**: Las preguntas 11, 21, 31, 41 y 51 muestran un popup de insignia de 4 segundos (después de completar la pregunta anterior). El `time_adjusted_ms` descuenta este tiempo del tiempo de respuesta.
 
-2. **Autenticación**: La API Key debe enviarse en el header `x-api-key`.
+2. **Autenticación**: La API Key debe enviarse en el header `x-api-key`. Se obtiene de AWS Secrets Manager.
 
 3. **Idempotencia**: Descargar la misma respuesta múltiples veces la marcará como descargada solo la primera vez. Use `desmarcar` para permitir re-descarga.
 
-4. **Errores Comunes**:
+4. **Almacenamiento**: Las respuestas se almacenan directamente en DynamoDB (no en S3).
+
+5. **Errores Comunes**:
    - `401 Unauthorized`: API Key inválida o faltante
    - `404 Not Found`: ID de respuesta no existe
    - `429 Too Many Requests`: Rate limit excedido (100 req/min)
-   - `400 Bad Request`: Path de S3 inválido o archivo muy grande (>10MB)
    - `500 Internal Server Error`: Error de configuración del servidor
 
 ---
@@ -470,8 +515,79 @@ O en la consola de AWS Lambda, buscar la función `responses-api` y ver la Funct
 ```bash
 # Configurar antes de ejecutar el script
 export CUESTIONARIO_API_URL="https://xxxxx.lambda-url.us-east-1.on.aws"
-export CUESTIONARIO_API_KEY="your-secure-api-key"
+
+# Obtener API key de Secrets Manager
+export CUESTIONARIO_API_KEY=$(aws secretsmanager get-secret-value \
+  --secret-id cuestionario/external-api-key \
+  --query SecretString --output text | jq -r '.apiKey')
 
 # Ejecutar
 python mi_script.py
+```
+
+---
+
+## Exportar a CSV
+
+```python
+import csv
+from typing import List
+
+def exportar_a_csv(respuestas: List[RespuestaCuestionario], filename: str = "respuestas.csv"):
+    """Exporta las respuestas a un archivo CSV."""
+
+    if not respuestas:
+        print("No hay respuestas para exportar")
+        return
+
+    # Obtener todas las preguntas (asumiendo mismo cuestionario)
+    num_preguntas = len(respuestas[0].answers)
+
+    with open(filename, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+
+        # Header
+        header = [
+            'id', 'token_id', 'cuestionario', 'version',
+            'started_at', 'finished_at',
+            'total_time_ms', 'total_time_adjusted_ms'
+        ]
+        # Agregar columnas para cada pregunta
+        for i in range(1, num_preguntas + 1):
+            header.extend([
+                f'p{i}_respuesta',
+                f'p{i}_tiempo_ms',
+                f'p{i}_tiempo_ajustado_ms',
+                f'p{i}_cambio'
+            ])
+        writer.writerow(header)
+
+        # Data
+        for resp in respuestas:
+            row = [
+                resp.id,
+                resp.token_id,
+                resp.cuestionario_title,
+                resp.cuestionario_version,
+                resp.started_at.isoformat(),
+                resp.finished_at.isoformat(),
+                resp.total_time_ms,
+                resp.total_time_adjusted_ms
+            ]
+            for answer in resp.answers:
+                row.extend([
+                    answer['selected_option_key'],
+                    answer['time_to_answer_ms'],
+                    answer['time_adjusted_ms'],
+                    answer['change_count']
+                ])
+            writer.writerow(row)
+
+    print(f"Exportado {len(respuestas)} respuestas a {filename}")
+
+
+# Uso
+client = CuestionarioAPIClient(api_url, api_key)
+respuestas = client.descargar_todas_pendientes()
+exportar_a_csv(respuestas, "respuestas_cuestionario.csv")
 ```
