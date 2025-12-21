@@ -8,10 +8,14 @@ export const storage = defineStorage({
       allow.guest.to(['read', 'list']),
       allow.authenticated.to(['read', 'write', 'delete', 'list']),
     ],
-    // SECURITY: Respuestas - guest solo puede escribir (submit), no leer otros
-    // La lectura de respuestas solo es para admin autenticado
+    // Respuestas - guest puede escribir en subdirectorios
+    // Path: respuestas/{cuestionarioId}/{tokenId}_{timestamp}.json
     'respuestas/*': [
-      allow.guest.to(['write']), // Solo escribir su propia respuesta
+      allow.guest.to(['write', 'list']),
+      allow.authenticated.to(['read', 'write', 'delete', 'list']),
+    ],
+    'respuestas/*/*': [
+      allow.guest.to(['write']),
       allow.authenticated.to(['read', 'write', 'delete', 'list']),
     ],
   }),

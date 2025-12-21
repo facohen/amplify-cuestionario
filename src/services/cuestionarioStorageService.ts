@@ -158,8 +158,10 @@ export async function uploadRespuesta(
   response: StoredResponse
 ): Promise<string> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const fileName = `${cuestionarioId}/${tokenId}_${timestamp}.json`;
-  const path = `${RESPUESTAS_PATH}${fileName}`;
+  const fileName = `${tokenId}_${timestamp}.json`;
+  const path = `${RESPUESTAS_PATH}${cuestionarioId}/${fileName}`;
+
+  console.log('uploadRespuesta: attempting to upload to path:', path);
 
   try {
     await uploadData({
@@ -170,7 +172,7 @@ export async function uploadRespuesta(
       },
     }).result;
 
-    console.log('Respuesta uploaded:', path);
+    console.log('Respuesta uploaded successfully:', path);
     return path;
   } catch (error) {
     console.error('Error uploading respuesta:', error);
@@ -184,7 +186,13 @@ export async function listRespuestas(cuestionarioId?: string): Promise<string[]>
     : RESPUESTAS_PATH;
 
   try {
-    const result = await list({ path });
+    const result = await list({
+      path,
+      options: {
+        listAll: true, // List all items including in subdirectories
+      },
+    });
+    console.log('listRespuestas result:', result.items.length, 'items found');
     return result.items.map((item) => item.path);
   } catch (error) {
     console.error('Error listing respuestas:', error);
