@@ -25,7 +25,7 @@ const functionUrl = responsesApiLambda.addFunctionUrl({
   cors: {
     allowedOrigins: ['*'],
     allowedHeaders: ['Content-Type', 'x-api-key', 'X-Api-Key'],
-    allowedMethods: [HttpMethod.GET, HttpMethod.POST, HttpMethod.OPTIONS],
+    allowedMethods: [HttpMethod.GET, HttpMethod.POST], // OPTIONS handled automatically by Lambda Function URL
     maxAge: Duration.hours(24),
   },
 });
