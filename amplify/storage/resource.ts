@@ -16,7 +16,7 @@ export const storage = defineStorage({
     ],
     'respuestas/*/*': [
       allow.guest.to(['write']),
-      allow.authenticated.to(['read', 'write', 'delete', 'list']),
+      allow.authenticated.to(['read', 'write', 'delete']),
     ],
   }),
 });
