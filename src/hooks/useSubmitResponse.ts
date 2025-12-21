@@ -1,12 +1,12 @@
 import { useState, useCallback } from 'react';
-import { CuestionarioResponse } from '../types/cuestionario';
+import { CuestionarioResponse, Cuestionario } from '../types/cuestionario';
 import { submitResponse as submitToBackend } from '../services/responseService';
 
 interface UseSubmitResponseReturn {
   isSubmitting: boolean;
   isSuccess: boolean;
   error: string | null;
-  submitResponse: (response: CuestionarioResponse, tokenId: string) => Promise<void>;
+  submitResponse: (response: CuestionarioResponse, tokenId: string, cuestionario: Cuestionario) => Promise<void>;
   reset: () => void;
 }
 
@@ -16,27 +16,17 @@ export function useSubmitResponse(): UseSubmitResponseReturn {
   const [error, setError] = useState<string | null>(null);
 
   const submitResponse = useCallback(
-    async (response: CuestionarioResponse, tokenId: string) => {
+    async (response: CuestionarioResponse, tokenId: string, cuestionario: Cuestionario) => {
       try {
         setIsSubmitting(true);
         setError(null);
 
-        await submitToBackend(response, tokenId);
-
-        // Also save to localStorage as backup
-        const responses = JSON.parse(localStorage.getItem('cuestionario_responses') || '[]');
-        responses.push(response);
-        localStorage.setItem('cuestionario_responses', JSON.stringify(responses));
+        await submitToBackend(response, tokenId, cuestionario);
 
         setIsSuccess(true);
       } catch (err) {
         console.error('Error submitting response:', err);
-        setError('Error al enviar las respuestas. Se han guardado localmente.');
-
-        // Save to localStorage even on error
-        const responses = JSON.parse(localStorage.getItem('cuestionario_responses') || '[]');
-        responses.push(response);
-        localStorage.setItem('cuestionario_responses', JSON.stringify(responses));
+        setError('Error al enviar las respuestas.');
       } finally {
         setIsSubmitting(false);
       }

@@ -14,6 +14,23 @@ const schema = a.schema({
       allow.authenticated().to(['create', 'read', 'update', 'delete']),
     ]),
 
+  // Tracking de descargas de respuestas para API externa
+  ResponseDownload: a
+    .model({
+      s3Path: a.string().required(),
+      cuestionarioId: a.string().required(),
+      tokenId: a.string().required(),
+      submittedAt: a.datetime().required(),
+      downloadedAt: a.datetime(),
+      downloadedBy: a.string(),
+      status: a.enum(['pending', 'downloaded']),
+    })
+    .authorization((allow) => [
+      allow.publicApiKey().to(['create', 'read', 'update']),
+      allow.authenticated().to(['create', 'read', 'update', 'delete']),
+    ])
+    .secondaryIndexes((index) => [index('status')]),
+
   // Definición del cuestionario
   CuestionarioDefinition: a
     .model({

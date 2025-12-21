@@ -5,13 +5,14 @@ export const storage = defineStorage({
   access: (allow) => ({
     // Cuestionarios JSON - públicos para lectura, admin para escritura
     'cuestionarios/*': [
-      allow.guest.to(['read']),
-      allow.authenticated.to(['read', 'write', 'delete']),
+      allow.guest.to(['read', 'list']),
+      allow.authenticated.to(['read', 'write', 'delete', 'list']),
     ],
-    // Respuestas - solo admin puede leer, público puede escribir
+    // SECURITY: Respuestas - guest solo puede escribir (submit), no leer otros
+    // La lectura de respuestas solo es para admin autenticado
     'respuestas/*': [
-      allow.guest.to(['write']),
-      allow.authenticated.to(['read', 'write', 'delete']),
+      allow.guest.to(['write']), // Solo escribir su propia respuesta
+      allow.authenticated.to(['read', 'write', 'delete', 'list']),
     ],
   }),
 });

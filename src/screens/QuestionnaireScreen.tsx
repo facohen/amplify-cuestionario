@@ -5,7 +5,7 @@ import { Cuestionario, AnswerMetrics, CuestionarioResponse } from '../types/cues
 import { useToken } from '../hooks/useToken';
 import { useGameProgress } from '../hooks/useGameProgress';
 import { useSubmitResponse } from '../hooks/useSubmitResponse';
-import { downloadCuestionario } from '../services/cuestionarioStorageService';
+import { getActiveCuestionario } from '../services/cuestionarioStorageService';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import ProgressBar from '../components/ui/ProgressBar';
@@ -55,17 +55,20 @@ export default function QuestionnaireScreen() {
   const isLastQuestion = cuestionarioData ? currentQuestion === cuestionarioData.questions.length - 1 : false;
   const currentEarnedBadges = getEarnedBadges(currentQuestion);
 
-  // Handle token validation result and load cuestionario
+  // Handle token validation result and load the ACTIVE cuestionario
   useEffect(() => {
     async function loadCuestionario() {
       if (!tokenLoading && isValid && token) {
         try {
-          const data = await downloadCuestionario(token.cuestionarioId);
+          // Always load the currently active cuestionario, not the one stored in token
+          const data = await getActiveCuestionario();
           if (data) {
             setCuestionarioData(data);
             setScreenState('welcome');
           } else {
-            navigate('/invalid?reason=not_found');
+            // No active cuestionario found
+            console.error('No active cuestionario found');
+            navigate('/invalid?reason=no_active');
           }
         } catch (error) {
           console.error('Error loading cuestionario:', error);
@@ -153,7 +156,7 @@ export default function QuestionnaireScreen() {
     };
 
     try {
-      await submitResponse(response, tokenId!);
+      await submitResponse(response, tokenId!, cuestionarioData);
       await markAsUsed();
       navigate('/completed', {
         state: {
@@ -163,7 +166,7 @@ export default function QuestionnaireScreen() {
       });
     } catch (error) {
       console.error('Error completing questionnaire:', error);
-      // Still navigate to completed even if backend fails (localStorage backup)
+      // Still navigate to completed even if S3 fails
       navigate('/completed', {
         state: {
           totalTime,

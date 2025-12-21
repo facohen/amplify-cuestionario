@@ -18,9 +18,14 @@ import {
   downloadRespuesta,
   StoredResponse,
 } from '../services/cuestionarioStorageService';
+import { generateClient } from 'aws-amplify/data';
+import type { Schema } from '../../amplify/data/resource';
+
+const client = generateClient<Schema>();
 
 type FilterStatus = 'all' | 'active' | 'used' | 'expired' | 'revoked';
 type AdminTab = 'tokens' | 'cuestionarios' | 'respuestas';
+type DownloadStatus = 'pending' | 'downloaded' | 'unknown';
 
 interface ResponseItem {
   path: string;
@@ -28,6 +33,8 @@ interface ResponseItem {
   tokenId: string;
   timestamp: string;
   data?: StoredResponse;
+  downloadStatus?: DownloadStatus;
+  downloadRecordId?: string;
 }
 
 function AdminPanel() {
@@ -109,6 +116,18 @@ function AdminPanel() {
       setIsLoadingRespuestas(true);
       const paths = await listRespuestas(filterCuestionarioId || undefined);
 
+      // Load download status from DynamoDB
+      const downloadRecords = await client.models.ResponseDownload.list();
+      const downloadStatusMap = new Map<string, { status: DownloadStatus; id: string }>();
+      downloadRecords.data?.forEach((record) => {
+        if (record.s3Path) {
+          downloadStatusMap.set(record.s3Path, {
+            status: (record.status as DownloadStatus) || 'unknown',
+            id: record.id,
+          });
+        }
+      });
+
       // Parse path info: respuestas/{cuestionarioId}/{tokenId}_{timestamp}.json
       const items: ResponseItem[] = paths
         .filter(path => path.endsWith('.json'))
@@ -119,11 +138,15 @@ function AdminPanel() {
           const [tokenId, ...timestampParts] = fileName.replace('.json', '').split('_');
           const timestamp = timestampParts.join('_');
 
+          const downloadInfo = downloadStatusMap.get(path);
+
           return {
             path,
             cuestionarioId,
             tokenId: tokenId || '',
             timestamp: timestamp || '',
+            downloadStatus: downloadInfo?.status || 'unknown',
+            downloadRecordId: downloadInfo?.id,
           };
         })
         .sort((a, b) => b.timestamp.localeCompare(a.timestamp)); // Most recent first
@@ -134,6 +157,26 @@ function AdminPanel() {
       console.error('Error loading respuestas:', error);
     } finally {
       setIsLoadingRespuestas(false);
+    }
+  }
+
+  async function handleUnmarkResponse(item: ResponseItem) {
+    if (!item.downloadRecordId) {
+      alert('No hay registro de descarga para esta respuesta');
+      return;
+    }
+
+    try {
+      await client.models.ResponseDownload.update({
+        id: item.downloadRecordId,
+        status: 'pending',
+        downloadedAt: null,
+        downloadedBy: null,
+      });
+      await loadRespuestas();
+    } catch (error) {
+      console.error('Error unmarking response:', error);
+      alert('Error al desmarcar respuesta');
     }
   }
 
@@ -307,18 +350,22 @@ function AdminPanel() {
 
   async function handleActivateCuestionario(cuestionarioId: string) {
     try {
+      console.log('Activating cuestionario:', cuestionarioId);
       // First, deactivate all other cuestionarios that are currently active
       for (const c of cuestionarios) {
         if (c.data?.status === 'active' && c.id !== cuestionarioId) {
+          console.log('Deactivating cuestionario:', c.id);
           await updateCuestionarioStatus(c.id, 'draft');
         }
       }
       // Activate the selected one
+      console.log('Setting cuestionario to active:', cuestionarioId);
       await updateCuestionarioStatus(cuestionarioId, 'active');
+      console.log('Cuestionario activated, reloading list...');
       await loadCuestionarios();
     } catch (error) {
       console.error('Error activating cuestionario:', error);
-      alert('Error al activar cuestionario');
+      alert(`Error al activar cuestionario: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     }
   }
 
@@ -334,11 +381,13 @@ function AdminPanel() {
 
   async function handleDraftCuestionario(cuestionarioId: string) {
     try {
+      console.log('Deactivating cuestionario:', cuestionarioId);
       await updateCuestionarioStatus(cuestionarioId, 'draft');
+      console.log('Cuestionario deactivated, reloading list...');
       await loadCuestionarios();
     } catch (error) {
       console.error('Error setting cuestionario to draft:', error);
-      alert('Error al cambiar estado del cuestionario');
+      alert(`Error al cambiar estado del cuestionario: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     }
   }
 
@@ -834,6 +883,7 @@ function AdminPanel() {
                         <th className="text-left py-3 px-2 font-medium text-gray-600">Token ID</th>
                         <th className="text-left py-3 px-2 font-medium text-gray-600">Cuestionario</th>
                         <th className="text-left py-3 px-2 font-medium text-gray-600">Fecha</th>
+                        <th className="text-left py-3 px-2 font-medium text-gray-600">Estado API</th>
                         <th className="text-right py-3 px-2 font-medium text-gray-600">Acciones</th>
                       </tr>
                     </thead>
@@ -865,6 +915,29 @@ function AdminPanel() {
                           </td>
                           <td className="py-3 px-2 text-gray-600">
                             {formatTimestamp(item.timestamp)}
+                          </td>
+                          <td className="py-3 px-2">
+                            {item.downloadStatus === 'downloaded' ? (
+                              <span className="inline-flex items-center gap-1">
+                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                  Descargado
+                                </span>
+                                <button
+                                  onClick={() => handleUnmarkResponse(item)}
+                                  className="text-xs text-gray-500 hover:text-gray-700 underline"
+                                >
+                                  Desmarcar
+                                </button>
+                              </span>
+                            ) : item.downloadStatus === 'pending' ? (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
+                                Pendiente
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                                Sin registro
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 px-2 text-right">
                             <button

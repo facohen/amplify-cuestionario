@@ -1,84 +1,110 @@
+import { CuestionarioResponse, Cuestionario, AnswerMetrics } from '../types/cuestionario';
+import {
+  uploadRespuesta,
+  StoredResponse,
+  EnrichedAnswer,
+  BADGE_POPUP_DURATION_MS,
+  BADGE_QUESTION_NUMBERS,
+} from './cuestionarioStorageService';
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
-import { CuestionarioResponse } from '../types/cuestionario';
 
 const client = generateClient<Schema>();
 
+/**
+ * Enriquece las respuestas con texto de pregunta y opción,
+ * y ajusta el tiempo descontando el popup de insignia si corresponde.
+ */
+function enrichAnswers(
+  answers: AnswerMetrics[],
+  cuestionario: Cuestionario
+): EnrichedAnswer[] {
+  return answers.map((answer) => {
+    const question = cuestionario.questions.find(
+      (q) => q.question_number === answer.question_number
+    );
+
+    const selectedOption = question?.options.find(
+      (o) => o.option_key === answer.selected_option
+    );
+
+    // Verificar si esta pregunta tuvo popup de insignia
+    const hadBadgePopup = BADGE_QUESTION_NUMBERS.includes(answer.question_number);
+
+    // Ajustar el tiempo descontando el popup si corresponde
+    const timeAdjusted = hadBadgePopup
+      ? Math.max(0, answer.time_to_answer_ms - BADGE_POPUP_DURATION_MS)
+      : answer.time_to_answer_ms;
+
+    return {
+      question_number: answer.question_number,
+      question_text: question?.text || '',
+      selected_option_key: answer.selected_option,
+      selected_option_text: selectedOption
+        ? `${selectedOption.option_key}. ${selectedOption.option_text}`
+        : answer.selected_option,
+      time_to_answer_ms: answer.time_to_answer_ms,
+      time_adjusted_ms: timeAdjusted,
+      changed_answer: answer.changed_answer,
+      change_count: answer.change_count,
+      had_badge_popup: hadBadgePopup,
+    };
+  });
+}
+
 export async function submitResponse(
   response: CuestionarioResponse,
-  tokenId: string
+  tokenId: string,
+  cuestionario: Cuestionario
 ): Promise<void> {
   try {
-    const { errors } = await client.models.CuestionarioResponse.create({
+    // Enriquecer las respuestas
+    const enrichedAnswers = enrichAnswers(response.answers, cuestionario);
+
+    // Calcular tiempo total ajustado (descontando todos los popups)
+    const totalPopupTime = enrichedAnswers.filter((a) => a.had_badge_popup).length * BADGE_POPUP_DURATION_MS;
+    const totalTimeAdjusted = Math.max(0, response.total_time_ms - totalPopupTime);
+
+    // Crear la respuesta enriquecida para S3
+    const storedResponse: StoredResponse = {
       tokenId,
-      cuestionarioId: response.cuestionario_id,
-      cuestionarioVersion: response.cuestionario_version,
+      submittedAt: new Date().toISOString(),
       startedAt: response.started_at,
       finishedAt: response.finished_at,
       totalTimeMs: response.total_time_ms,
-      answersJson: JSON.stringify(response.answers),
-      status: 'completed',
-    });
+      totalTimeAdjustedMs: totalTimeAdjusted,
+      cuestionario: {
+        id: cuestionario.id_cuestionario,
+        version: cuestionario.version,
+        title: cuestionario.title,
+        description: cuestionario.description,
+        total_questions: cuestionario.total_questions,
+        creado_por: cuestionario.creado_por,
+      },
+      answers: enrichedAnswers,
+    };
 
-    if (errors) {
-      console.error('Errors creating response:', errors);
-      throw new Error('Failed to submit response');
+    const s3Path = await uploadRespuesta(tokenId, cuestionario.id_cuestionario, storedResponse);
+
+    // Create tracking record in DynamoDB for external API
+    try {
+      await client.models.ResponseDownload.create({
+        s3Path,
+        cuestionarioId: cuestionario.id_cuestionario,
+        tokenId,
+        submittedAt: new Date().toISOString(),
+        status: 'pending',
+      });
+      console.log('Response download tracking record created');
+    } catch (trackingError) {
+      // Don't fail the submission if tracking record creation fails
+      console.error('Error creating tracking record:', trackingError);
     }
 
-    console.log('Response submitted successfully');
+    console.log('Response submitted successfully to S3');
   } catch (error) {
     console.error('Error submitting response:', error);
     throw error;
   }
 }
 
-export async function getResponseByToken(tokenId: string): Promise<CuestionarioResponse | null> {
-  try {
-    const { data: responses, errors } = await client.models.CuestionarioResponse.list({
-      filter: {
-        tokenId: { eq: tokenId },
-      },
-    });
-
-    if (errors || !responses || responses.length === 0) {
-      return null;
-    }
-
-    const response = responses[0];
-    return {
-      response_id: response.id,
-      cuestionario_id: response.cuestionarioId,
-      cuestionario_version: response.cuestionarioVersion,
-      started_at: response.startedAt,
-      finished_at: response.finishedAt || '',
-      total_time_ms: response.totalTimeMs || 0,
-      answers: JSON.parse(response.answersJson as string || '[]'),
-    };
-  } catch (error) {
-    console.error('Error getting response:', error);
-    return null;
-  }
-}
-
-export async function listResponses(): Promise<CuestionarioResponse[]> {
-  try {
-    const { data: responses, errors } = await client.models.CuestionarioResponse.list();
-
-    if (errors) {
-      throw new Error('Failed to list responses');
-    }
-
-    return responses.map((response) => ({
-      response_id: response.id,
-      cuestionario_id: response.cuestionarioId,
-      cuestionario_version: response.cuestionarioVersion,
-      started_at: response.startedAt,
-      finished_at: response.finishedAt || '',
-      total_time_ms: response.totalTimeMs || 0,
-      answers: JSON.parse(response.answersJson as string || '[]'),
-    }));
-  } catch (error) {
-    console.error('Error listing responses:', error);
-    throw error;
-  }
-}

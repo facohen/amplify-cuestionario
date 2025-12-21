@@ -28,6 +28,16 @@ export default function InvalidTokenScreen() {
       description: 'Este enlace ha sido revocado por el administrador.',
       emoji: '🚫',
     },
+    no_active: {
+      title: 'Cuestionario no disponible',
+      description: 'No hay un cuestionario activo en este momento. Intenta mas tarde.',
+      emoji: '📋',
+    },
+    error: {
+      title: 'Error al cargar',
+      description: 'Hubo un error al cargar el cuestionario. Intenta mas tarde.',
+      emoji: '⚠️',
+    },
   };
 
   const content = messages[reason || 'invalid'] || messages.invalid;

@@ -16,6 +16,7 @@ export async function uploadCuestionario(cuestionario: Cuestionario): Promise<st
       data: JSON.stringify(cuestionario, null, 2),
       options: {
         contentType: 'application/json',
+        // Explicitly use authenticated access for admin operations
       },
     }).result;
 
@@ -66,20 +67,25 @@ export async function updateCuestionarioStatus(
   cuestionarioId: string,
   newStatus: CuestionarioStatus
 ): Promise<Cuestionario | null> {
+  console.log('updateCuestionarioStatus called:', { cuestionarioId, newStatus });
+
   try {
     // Download current cuestionario
+    console.log('Downloading cuestionario...');
     const cuestionario = await downloadCuestionario(cuestionarioId);
     if (!cuestionario) {
-      throw new Error('Cuestionario not found');
+      throw new Error(`Cuestionario not found: ${cuestionarioId}`);
     }
+    console.log('Current status:', cuestionario.status);
 
     // Update status
     cuestionario.status = newStatus;
 
     // Re-upload with new status
+    console.log('Uploading cuestionario with new status...');
     await uploadCuestionario(cuestionario);
 
-    console.log('Cuestionario status updated:', cuestionarioId, newStatus);
+    console.log('Cuestionario status updated successfully:', cuestionarioId, newStatus);
     return cuestionario;
   } catch (error) {
     console.error('Error updating cuestionario status:', error);
@@ -105,15 +111,45 @@ export async function getActiveCuestionario(): Promise<Cuestionario | null> {
 
 // ============ RESPUESTAS ============
 
+// Tiempo que se muestra el popup de insignia (en ms)
+export const BADGE_POPUP_DURATION_MS = 4000;
+
+// Preguntas donde se muestra el popup de insignia (después de completar 10, 20, 30, 40, 50)
+export const BADGE_QUESTION_NUMBERS = [11, 21, 31, 41, 51];
+
+export interface EnrichedAnswer {
+  question_number: number;
+  question_text: string;
+  selected_option_key: string;
+  selected_option_text: string;
+  time_to_answer_ms: number;
+  time_adjusted_ms: number; // Tiempo ajustado (descontando popup si aplica)
+  changed_answer: boolean;
+  change_count: number;
+  had_badge_popup: boolean;
+}
+
 export interface StoredResponse {
+  // Metadatos de la respuesta
   tokenId: string;
-  cuestionarioId: string;
-  cuestionarioVersion: string;
+  submittedAt: string;
   startedAt: string;
   finishedAt: string;
   totalTimeMs: number;
-  answers: unknown[];
-  submittedAt: string;
+  totalTimeAdjustedMs: number; // Tiempo total ajustado (descontando popups)
+
+  // Metadatos del cuestionario
+  cuestionario: {
+    id: string;
+    version: string;
+    title: string;
+    description: string;
+    total_questions: number;
+    creado_por: string;
+  };
+
+  // Respuestas enriquecidas
+  answers: EnrichedAnswer[];
 }
 
 export async function uploadRespuesta(
