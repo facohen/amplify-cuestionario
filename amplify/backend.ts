@@ -30,17 +30,12 @@ const functionUrl = responsesApiLambda.addFunctionUrl({
 const cuestionarioResponseTable = backend.data.resources.tables['CuestionarioResponse'];
 cuestionarioResponseTable.grantReadWriteData(responsesApiLambda);
 
-// Create a secret for the external API key
-const apiKeySecret = new Secret(backend.stack, 'ExternalApiKeySecret', {
-  secretName: 'cuestionario/external-api-key',
-  description: 'API key for external systems to access the responses API',
-  generateSecretString: {
-    secretStringTemplate: JSON.stringify({}),
-    generateStringKey: 'apiKey',
-    excludePunctuation: true,
-    passwordLength: 32,
-  },
-});
+// Reference existing secret for the external API key (created manually in AWS Secrets Manager)
+const apiKeySecret = Secret.fromSecretNameV2(
+  backend.stack,
+  'ExternalApiKeySecret',
+  'cuestionario/external-api-key'
+);
 
 // Grant Lambda permission to read the secret
 apiKeySecret.grantRead(responsesApiLambda);
