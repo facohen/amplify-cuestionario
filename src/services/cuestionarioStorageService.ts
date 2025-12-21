@@ -1,5 +1,5 @@
 import { uploadData, downloadData, list, remove } from 'aws-amplify/storage';
-import { Cuestionario } from '../types/cuestionario';
+import { Cuestionario, CuestionarioStatus } from '../types/cuestionario';
 
 const CUESTIONARIOS_PATH = 'cuestionarios/';
 const RESPUESTAS_PATH = 'respuestas/';
@@ -59,6 +59,47 @@ export async function deleteCuestionario(cuestionarioId: string): Promise<void> 
   } catch (error) {
     console.error('Error deleting cuestionario:', error);
     throw error;
+  }
+}
+
+export async function updateCuestionarioStatus(
+  cuestionarioId: string,
+  newStatus: CuestionarioStatus
+): Promise<Cuestionario | null> {
+  try {
+    // Download current cuestionario
+    const cuestionario = await downloadCuestionario(cuestionarioId);
+    if (!cuestionario) {
+      throw new Error('Cuestionario not found');
+    }
+
+    // Update status
+    cuestionario.status = newStatus;
+
+    // Re-upload with new status
+    await uploadCuestionario(cuestionario);
+
+    console.log('Cuestionario status updated:', cuestionarioId, newStatus);
+    return cuestionario;
+  } catch (error) {
+    console.error('Error updating cuestionario status:', error);
+    throw error;
+  }
+}
+
+export async function getActiveCuestionario(): Promise<Cuestionario | null> {
+  try {
+    const ids = await listCuestionarios();
+    for (const id of ids) {
+      const cuestionario = await downloadCuestionario(id);
+      if (cuestionario && cuestionario.status === 'active') {
+        return cuestionario;
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting active cuestionario:', error);
+    return null;
   }
 }
 

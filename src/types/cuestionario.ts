@@ -11,6 +11,8 @@ export interface Question {
   options: Option[];
 }
 
+export type CuestionarioStatus = 'draft' | 'active' | 'archived';
+
 export interface Cuestionario {
   id_cuestionario: string;
   version: string;
@@ -18,7 +20,7 @@ export interface Cuestionario {
   description: string;
   total_questions: number;
   creado_por: string;
-  status: string;
+  status: CuestionarioStatus;
   questions: Question[];
 }
 

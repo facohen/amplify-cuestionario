@@ -1,0 +1,117 @@
+{
+  "id_cuestionario": "MOCK-TEST-V1",
+  "version": "v1",
+  "title": "Cuestionario de Prueba",
+  "description": "Cuestionario de prueba con 10 preguntas para testing.",
+  "total_questions": 10,
+  "creado_por": "Equipo de Desarrollo",
+  "status": "draft",
+  "questions": [
+    {
+      "question_number": 1,
+      "text": "¿Cuál es tu edad?",
+      "question_type": "multiple_choice",
+      "options": [
+        { "option_key": "A", "option_text": "18 a 24 años.", "score": 0 },
+        { "option_key": "B", "option_text": "25 a 44 años.", "score": 0 },
+        { "option_key": "C", "option_text": "45 a 59 años.", "score": 0 },
+        { "option_key": "D", "option_text": "60 años o más.", "score": 0 }
+      ]
+    },
+    {
+      "question_number": 2,
+      "text": "¿Cuál es tu estado civil?",
+      "question_type": "multiple_choice",
+      "options": [
+        { "option_key": "A", "option_text": "Soltero.", "score": 0 },
+        { "option_key": "B", "option_text": "Casado / Conviviente.", "score": 0 },
+        { "option_key": "C", "option_text": "Separado.", "score": 0 },
+        { "option_key": "D", "option_text": "Viudo.", "score": 0 }
+      ]
+    },
+    {
+      "question_number": 3,
+      "text": "¿Cuántas personas dependen económicamente de vos?",
+      "question_type": "multiple_choice",
+      "options": [
+        { "option_key": "A", "option_text": "Ninguna.", "score": 0 },
+        { "option_key": "B", "option_text": "1 a 2 personas.", "score": 0 },
+        { "option_key": "C", "option_text": "3 a 4 personas.", "score": 0 },
+        { "option_key": "D", "option_text": "5 o más personas.", "score": 0 }
+      ]
+    },
+    {
+      "question_number": 4,
+      "text": "¿Hace cuánto tiempo vivís en esta casa?",
+      "question_type": "multiple_choice",
+      "options": [
+        { "option_key": "A", "option_text": "Menos de 1 año.", "score": 0 },
+        { "option_key": "B", "option_text": "1 a 3 años.", "score": 0 },
+        { "option_key": "C", "option_text": "4 a 10 años.", "score": 0 },
+        { "option_key": "D", "option_text": "Más de 10 años.", "score": 0 }
+      ]
+    },
+    {
+      "question_number": 5,
+      "text": "¿De dónde vienen tus ingresos principalmente?",
+      "question_type": "multiple_choice",
+      "options": [
+        { "option_key": "A", "option_text": "Cobro un sueldo o jubilación todos los meses.", "score": 0 },
+        { "option_key": "B", "option_text": "Tengo negocio, profesión o comercio.", "score": 0 },
+        { "option_key": "C", "option_text": "Trabajo por mi cuenta, oficio o servicio.", "score": 0 },
+        { "option_key": "D", "option_text": "No tengo ingresos propios.", "score": 0 }
+      ]
+    },
+    {
+      "question_number": 6,
+      "text": "¿Hace cuánto tiempo mantenés esta actividad o ingreso?",
+      "question_type": "multiple_choice",
+      "options": [
+        { "option_key": "A", "option_text": "Menos de 1 año.", "score": 0 },
+        { "option_key": "B", "option_text": "Entre 1 y 3 años.", "score": 0 },
+        { "option_key": "C", "option_text": "Más de 3 años.", "score": 0 },
+        { "option_key": "D", "option_text": "No tengo ingresos actualmente.", "score": 0 }
+      ]
+    },
+    {
+      "question_number": 7,
+      "text": "¿Cómo recibís o manejás habitualmente la plata de tu trabajo?",
+      "question_type": "multiple_choice",
+      "options": [
+        { "option_key": "A", "option_text": "Me depositan en cuenta bancaria (CBU).", "score": 0 },
+        { "option_key": "B", "option_text": "Me transfieren a billeteras (Mercado Pago, Ualá, etc).", "score": 0 },
+        { "option_key": "C", "option_text": "Cobro la mayor parte en efectivo.", "score": 0 },
+        { "option_key": "D", "option_text": "Cobro una parte en banco/billetera y otra en efectivo.", "score": 0 }
+      ]
+    },
+    {
+      "question_number": 8,
+      "text": "Cuando ves algo que te gusta en un local o en internet:",
+      "question_type": "multiple_choice",
+      "options": [
+        { "option_key": "A", "option_text": "Pienso si realmente lo necesito.", "score": 0 },
+        { "option_key": "B", "option_text": "Comparo precios en otros lugares o sitios web.", "score": 0 },
+        { "option_key": "C", "option_text": "Lo compro, me gusta.", "score": 0 },
+        { "option_key": "D", "option_text": "Lo dejo para después.", "score": 0 }
+      ]
+    },
+    {
+      "question_number": 9,
+      "text": "Prefiero tener todo pensado con anticipación:",
+      "question_type": "forced_choice",
+      "options": [
+        { "option_key": "A", "option_text": "Totalmente de acuerdo.", "score": 0 },
+        { "option_key": "B", "option_text": "En desacuerdo.", "score": 0 }
+      ]
+    },
+    {
+      "question_number": 10,
+      "text": "Me resulta fácil ahorrar dinero:",
+      "question_type": "forced_choice",
+      "options": [
+        { "option_key": "A", "option_text": "Totalmente de acuerdo.", "score": 0 },
+        { "option_key": "B", "option_text": "En desacuerdo.", "score": 0 }
+      ]
+    }
+  ]
+}

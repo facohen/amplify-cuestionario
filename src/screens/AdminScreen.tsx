@@ -13,6 +13,7 @@ import {
   downloadCuestionario,
   listCuestionarios,
   deleteCuestionario,
+  updateCuestionarioStatus,
   listRespuestas,
   downloadRespuesta,
   StoredResponse,
@@ -264,6 +265,11 @@ function AdminPanel() {
         throw new Error('Archivo JSON inválido: falta id_cuestionario o questions');
       }
 
+      // Ensure new uploads default to draft status
+      if (!cuestionario.status) {
+        cuestionario.status = 'draft';
+      }
+
       await uploadCuestionario(cuestionario);
       await loadCuestionarios();
       alert('Cuestionario subido exitosamente');
@@ -278,7 +284,13 @@ function AdminPanel() {
     }
   }
 
-  async function handleDeleteCuestionario(cuestionarioId: string) {
+  async function handleDeleteCuestionario(cuestionarioId: string, status?: string) {
+    // Prevent deletion of active cuestionarios
+    if (status === 'active') {
+      alert('No se puede eliminar un cuestionario activo. Primero desactívalo o archívalo.');
+      return;
+    }
+
     if (!confirm(`¿Estás seguro de eliminar el cuestionario "${cuestionarioId}"?`)) return;
 
     try {
@@ -290,6 +302,43 @@ function AdminPanel() {
     } catch (error) {
       console.error('Error deleting cuestionario:', error);
       alert('Error al eliminar cuestionario');
+    }
+  }
+
+  async function handleActivateCuestionario(cuestionarioId: string) {
+    try {
+      // First, deactivate all other cuestionarios that are currently active
+      for (const c of cuestionarios) {
+        if (c.data?.status === 'active' && c.id !== cuestionarioId) {
+          await updateCuestionarioStatus(c.id, 'draft');
+        }
+      }
+      // Activate the selected one
+      await updateCuestionarioStatus(cuestionarioId, 'active');
+      await loadCuestionarios();
+    } catch (error) {
+      console.error('Error activating cuestionario:', error);
+      alert('Error al activar cuestionario');
+    }
+  }
+
+  async function handleArchiveCuestionario(cuestionarioId: string) {
+    try {
+      await updateCuestionarioStatus(cuestionarioId, 'archived');
+      await loadCuestionarios();
+    } catch (error) {
+      console.error('Error archiving cuestionario:', error);
+      alert('Error al archivar cuestionario');
+    }
+  }
+
+  async function handleDraftCuestionario(cuestionarioId: string) {
+    try {
+      await updateCuestionarioStatus(cuestionarioId, 'draft');
+      await loadCuestionarios();
+    } catch (error) {
+      console.error('Error setting cuestionario to draft:', error);
+      alert('Error al cambiar estado del cuestionario');
     }
   }
 
@@ -464,13 +513,24 @@ function AdminPanel() {
                       key={id}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="p-4 border border-gray-200 rounded-lg hover:border-fuchsia-300 transition-colors"
+                      className={`p-4 border-2 rounded-lg transition-colors ${
+                        data?.status === 'active'
+                          ? 'border-green-400 bg-green-50'
+                          : 'border-gray-200 hover:border-fuchsia-300'
+                      }`}
                     >
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
-                          <h3 className="font-semibold text-gray-800">
-                            {data?.title || id}
-                          </h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-gray-800">
+                              {data?.title || id}
+                            </h3>
+                            {data?.status === 'active' && (
+                              <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full font-medium">
+                                ACTIVO
+                              </span>
+                            )}
+                          </div>
                           <p className="text-sm text-gray-600 mt-1">
                             {data?.description}
                           </p>
@@ -483,16 +543,49 @@ function AdminPanel() {
                               data?.status === 'draft' ? 'bg-yellow-100 text-yellow-700' :
                               'bg-gray-100 text-gray-700'
                             }`}>
-                              {data?.status}
+                              {data?.status || 'draft'}
                             </span>
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleDeleteCuestionario(id)}
-                          className="text-red-600 hover:text-red-800 text-sm font-medium px-3 py-1"
-                        >
-                          Eliminar
-                        </button>
+                        <div className="flex gap-2 items-center">
+                          {/* Status action buttons */}
+                          {data?.status !== 'active' && (
+                            <button
+                              onClick={() => handleActivateCuestionario(id)}
+                              className="text-green-600 hover:text-green-800 text-sm font-medium px-3 py-1 border border-green-300 rounded hover:bg-green-50"
+                            >
+                              Activar
+                            </button>
+                          )}
+                          {data?.status === 'active' && (
+                            <button
+                              onClick={() => handleDraftCuestionario(id)}
+                              className="text-yellow-600 hover:text-yellow-800 text-sm font-medium px-3 py-1 border border-yellow-300 rounded hover:bg-yellow-50"
+                            >
+                              Desactivar
+                            </button>
+                          )}
+                          {data?.status !== 'archived' && data?.status !== 'active' && (
+                            <button
+                              onClick={() => handleArchiveCuestionario(id)}
+                              className="text-gray-600 hover:text-gray-800 text-sm font-medium px-3 py-1 border border-gray-300 rounded hover:bg-gray-50"
+                            >
+                              Archivar
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteCuestionario(id, data?.status)}
+                            disabled={data?.status === 'active'}
+                            className={`text-sm font-medium px-3 py-1 border rounded ${
+                              data?.status === 'active'
+                                ? 'text-gray-400 border-gray-200 cursor-not-allowed'
+                                : 'text-red-600 hover:text-red-800 border-red-300 hover:bg-red-50'
+                            }`}
+                            title={data?.status === 'active' ? 'No se puede eliminar un cuestionario activo' : ''}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
                       </div>
                     </motion.div>
                   ))}
