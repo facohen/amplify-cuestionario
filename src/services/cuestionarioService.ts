@@ -384,6 +384,61 @@ export async function unmarkResponse(id: string): Promise<void> {
   console.log('Response unmarked:', id);
 }
 
+// ============ ABANDONOS ============
+
+export interface AbandonedResponseData {
+  tokenId: string;
+  cuestionarioId: string;
+  cuestionarioVersion: string;
+  cuestionarioTitle: string;
+  startedAt: string;
+  answers: AnswerMetrics[];
+  abandonedAt: string;
+}
+
+export async function submitAbandonedResponse(data: AbandonedResponseData): Promise<void> {
+  console.log('submitAbandonedResponse called:', { tokenId: data.tokenId, answersCount: data.answers.length });
+
+  const totalTimeMs = new Date(data.abandonedAt).getTime() - new Date(data.startedAt).getTime();
+
+  const payload = {
+    tokenId: data.tokenId,
+    cuestionarioId: data.cuestionarioId,
+    cuestionarioVersion: data.cuestionarioVersion,
+    cuestionarioTitle: data.cuestionarioTitle,
+    startedAt: data.startedAt,
+    finishedAt: null,
+    totalTimeMs,
+    totalTimeAdjustedMs: null,
+    answersJson: JSON.stringify(data.answers),
+    status: 'abandoned' as const,
+    downloadStatus: 'pending' as const,
+  };
+
+  try {
+    const result = await client.models.CuestionarioResponse.create(payload);
+
+    if (result.errors) {
+      console.error('GraphQL errors creating abandoned response:', result.errors);
+      throw new Error(result.errors.map(e => e.message).join(', '));
+    }
+
+    console.log('Abandoned response submitted:', result.data?.id);
+
+    // Marcar token como usado
+    await client.models.Token.update({
+      id: data.tokenId,
+      status: 'used',
+      usedAt: data.abandonedAt,
+    });
+
+    console.log('Token marked as used after abandonment:', data.tokenId);
+  } catch (error) {
+    console.error('Exception creating abandoned response:', error);
+    throw error;
+  }
+}
+
 export async function listPendingResponses(): Promise<StoredResponseData[]> {
   // Usar authClient porque read de responses requiere autenticación
   const result = await authClient.models.CuestionarioResponse.list({

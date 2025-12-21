@@ -5,7 +5,7 @@ import { Cuestionario, AnswerMetrics, CuestionarioResponse } from '../types/cues
 import { useToken } from '../hooks/useToken';
 import { useGameProgress } from '../hooks/useGameProgress';
 import { useSubmitResponse } from '../hooks/useSubmitResponse';
-import { getActiveCuestionario } from '../services/cuestionarioService';
+import { getActiveCuestionario, submitAbandonedResponse } from '../services/cuestionarioService';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import ProgressBar from '../components/ui/ProgressBar';
@@ -54,6 +54,47 @@ export default function QuestionnaireScreen() {
   const question = cuestionarioData?.questions[currentQuestion];
   const isLastQuestion = cuestionarioData ? currentQuestion === cuestionarioData.questions.length - 1 : false;
   const currentEarnedBadges = getEarnedBadges(currentQuestion);
+
+  // Al montar, verificar si hay abandono pendiente y enviarlo
+  useEffect(() => {
+    const abandoned = localStorage.getItem('abandoned_questionnaire');
+    if (abandoned) {
+      try {
+        const data = JSON.parse(abandoned);
+        submitAbandonedResponse(data)
+          .then(() => {
+            localStorage.removeItem('abandoned_questionnaire');
+            console.log('Abandoned questionnaire submitted successfully');
+          })
+          .catch((err) => {
+            console.error('Error submitting abandoned questionnaire:', err);
+          });
+      } catch (err) {
+        console.error('Error parsing abandoned questionnaire:', err);
+        localStorage.removeItem('abandoned_questionnaire');
+      }
+    }
+  }, []);
+
+  // Detectar abandono al cerrar pestaña/navegar fuera
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (answers.length > 0 && !isSubmitting && startedAt && tokenId && cuestionarioData) {
+        localStorage.setItem('abandoned_questionnaire', JSON.stringify({
+          tokenId,
+          cuestionarioId: cuestionarioData.id_cuestionario,
+          cuestionarioVersion: cuestionarioData.version,
+          cuestionarioTitle: cuestionarioData.title,
+          startedAt,
+          answers,
+          abandonedAt: new Date().toISOString(),
+        }));
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [answers, isSubmitting, startedAt, tokenId, cuestionarioData]);
 
   // Handle token validation result and load the ACTIVE cuestionario
   useEffect(() => {
@@ -156,6 +197,8 @@ export default function QuestionnaireScreen() {
     };
 
     try {
+      // Limpiar localStorage antes de enviar - el cuestionario se completó
+      localStorage.removeItem('abandoned_questionnaire');
       await submitResponse(response, tokenId!, cuestionarioData);
       await markAsUsed();
       navigate('/completed', {

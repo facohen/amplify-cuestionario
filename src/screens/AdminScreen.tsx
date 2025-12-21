@@ -824,6 +824,7 @@ function AdminPanel() {
                         <th className="text-left py-3 px-2 font-medium text-gray-600">Token ID</th>
                         <th className="text-left py-3 px-2 font-medium text-gray-600">Cuestionario</th>
                         <th className="text-left py-3 px-2 font-medium text-gray-600">Fecha</th>
+                        <th className="text-left py-3 px-2 font-medium text-gray-600">Estado</th>
                         <th className="text-left py-3 px-2 font-medium text-gray-600">Estado API</th>
                         <th className="text-right py-3 px-2 font-medium text-gray-600">Acciones</th>
                       </tr>
@@ -856,6 +857,24 @@ function AdminPanel() {
                           </td>
                           <td className="py-3 px-2 text-gray-600">
                             {formatDate(item.createdAt)}
+                          </td>
+                          <td className="py-3 px-2">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                              item.status === 'completed'
+                                ? 'bg-green-100 text-green-700'
+                                : item.status === 'abandoned'
+                                ? 'bg-orange-100 text-orange-700'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}>
+                              {item.status === 'completed' ? 'Completado' :
+                               item.status === 'abandoned' ? 'Abandonado' :
+                               item.status || 'Desconocido'}
+                            </span>
+                            {item.status === 'abandoned' && (
+                              <span className="block text-xs text-gray-500 mt-1">
+                                {item.answersJson?.length || 0} respuestas
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 px-2">
                             {item.downloadStatus === 'downloaded' ? (
