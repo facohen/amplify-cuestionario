@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { cuestionarioData } from '../data/cuestionario';
-import { AnswerMetrics, CuestionarioResponse } from '../types/cuestionario';
+import { Cuestionario, AnswerMetrics, CuestionarioResponse } from '../types/cuestionario';
 import { useToken } from '../hooks/useToken';
 import { useGameProgress } from '../hooks/useGameProgress';
 import { useSubmitResponse } from '../hooks/useSubmitResponse';
+import { downloadCuestionario } from '../services/cuestionarioStorageService';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import ProgressBar from '../components/ui/ProgressBar';
@@ -25,7 +25,7 @@ export default function QuestionnaireScreen() {
   const navigate = useNavigate();
 
   // Token validation
-  const { isLoading: tokenLoading, isValid, error: tokenError, markAsUsed } = useToken(tokenId);
+  const { isLoading: tokenLoading, isValid, token, error: tokenError, markAsUsed } = useToken(tokenId);
 
   // Game progress
   const { currentBadge, showBadgeModal, checkForBadge, closeBadgeModal } =
@@ -36,6 +36,9 @@ export default function QuestionnaireScreen() {
 
   // Screen state
   const [screenState, setScreenState] = useState<ScreenState>('loading');
+
+  // Cuestionario data loaded from S3
+  const [cuestionarioData, setCuestionarioData] = useState<Cuestionario | null>(null);
 
   // Questionnaire state
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -48,16 +51,27 @@ export default function QuestionnaireScreen() {
   const changeCount = useRef<number>(0);
   const firstSelection = useRef<string | null>(null);
 
-  const question = cuestionarioData.questions[currentQuestion];
-  const isLastQuestion = currentQuestion === cuestionarioData.questions.length - 1;
+  const question = cuestionarioData?.questions[currentQuestion];
+  const isLastQuestion = cuestionarioData ? currentQuestion === cuestionarioData.questions.length - 1 : false;
   const currentEarnedBadges = getEarnedBadges(currentQuestion);
 
-  // Handle token validation result
+  // Handle token validation result and load cuestionario
   useEffect(() => {
-    if (!tokenLoading) {
-      if (isValid) {
-        setScreenState('welcome');
-      } else {
+    async function loadCuestionario() {
+      if (!tokenLoading && isValid && token) {
+        try {
+          const data = await downloadCuestionario(token.cuestionarioId);
+          if (data) {
+            setCuestionarioData(data);
+            setScreenState('welcome');
+          } else {
+            navigate('/invalid?reason=not_found');
+          }
+        } catch (error) {
+          console.error('Error loading cuestionario:', error);
+          navigate('/invalid?reason=error');
+        }
+      } else if (!tokenLoading && !isValid) {
         // Redirect to invalid token page with reason
         const reason = tokenError?.includes('utilizado')
           ? 'used'
@@ -69,7 +83,9 @@ export default function QuestionnaireScreen() {
         navigate(`/invalid?reason=${reason}`);
       }
     }
-  }, [tokenLoading, isValid, tokenError, navigate]);
+
+    loadCuestionario();
+  }, [tokenLoading, isValid, token, tokenError, navigate]);
 
   // Reset question tracking when question changes
   useEffect(() => {
@@ -93,7 +109,7 @@ export default function QuestionnaireScreen() {
   }
 
   async function handleNext() {
-    if (selectedOption === null) return;
+    if (selectedOption === null || !question) return;
 
     const timeToAnswer = Date.now() - questionStartTime.current;
     const answerMetrics: AnswerMetrics = {
@@ -119,6 +135,8 @@ export default function QuestionnaireScreen() {
   }
 
   async function handleComplete(finalAnswers: AnswerMetrics[]) {
+    if (!cuestionarioData) return;
+
     setScreenState('submitting');
 
     const finishedAt = new Date().toISOString();
@@ -168,7 +186,7 @@ export default function QuestionnaireScreen() {
   }
 
   // Welcome state
-  if (screenState === 'welcome') {
+  if (screenState === 'welcome' && cuestionarioData) {
     return (
       <div className="min-h-screen bg-gradient-questionnaire flex items-center justify-center p-4">
         <Card className="max-w-md w-full text-center">
@@ -215,7 +233,18 @@ export default function QuestionnaireScreen() {
     );
   }
 
-  // Questionnaire state
+  // Questionnaire state - ensure we have data
+  if (!cuestionarioData || !question) {
+    return (
+      <div className="min-h-screen bg-gradient-questionnaire flex items-center justify-center">
+        <Card className="text-center p-8">
+          <LoadingSpinner size="lg" className="mb-4" />
+          <p className="text-gray-600">Cargando cuestionario...</p>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white flex flex-col items-center p-4">
       {/* Badge modal */}
