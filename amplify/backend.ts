@@ -1,19 +1,23 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
-import { responsesApi } from './functions/responses-api/resource';
-import { FunctionUrlAuthType, HttpMethod, Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
+import { FunctionUrlAuthType, HttpMethod, Runtime, Code, Function } from 'aws-cdk-lib/aws-lambda';
 import { Duration } from 'aws-cdk-lib';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 
 const backend = defineBackend({
   auth,
   data,
-  responsesApi,
 });
 
-// Get the Lambda function from Amplify's defineFunction
-const responsesApiLambda = backend.responsesApi.resources.lambda;
+// Create Python Lambda directly with CDK (Amplify defineFunction only supports JS/TS)
+const responsesApiLambda = new Function(backend.stack, 'ResponsesApiFunction', {
+  functionName: 'responses-api',
+  runtime: Runtime.PYTHON_3_12,
+  handler: 'handler.handler',
+  code: Code.fromAsset(new URL('./functions/responses-api', import.meta.url).pathname),
+  timeout: Duration.seconds(30),
+});
 
 // Add function URL
 const functionUrl = responsesApiLambda.addFunctionUrl({
@@ -40,10 +44,9 @@ const apiKeySecret = Secret.fromSecretNameV2(
 // Grant Lambda permission to read the secret
 apiKeySecret.grantRead(responsesApiLambda);
 
-// Add environment variables to Lambda (cast to Function to access addEnvironment)
-const fn = responsesApiLambda as LambdaFunction;
-fn.addEnvironment('CUESTIONARIO_RESPONSE_TABLE_NAME', cuestionarioResponseTable.tableName);
-fn.addEnvironment('API_KEY_SECRET_ARN', apiKeySecret.secretArn);
+// Add environment variables to Lambda
+responsesApiLambda.addEnvironment('CUESTIONARIO_RESPONSE_TABLE_NAME', cuestionarioResponseTable.tableName);
+responsesApiLambda.addEnvironment('API_KEY_SECRET_ARN', apiKeySecret.secretArn);
 
 // Output the function URL
 backend.addOutput({
