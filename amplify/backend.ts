@@ -1,7 +1,6 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
-import { storage } from './storage/resource';
 import { responsesApi } from './functions/responses-api/resource';
 import { FunctionUrlAuthType, HttpMethod } from 'aws-cdk-lib/aws-lambda';
 import { Duration } from 'aws-cdk-lib';
@@ -10,7 +9,6 @@ import { Function } from 'aws-cdk-lib/aws-lambda';
 const backend = defineBackend({
   auth,
   data,
-  storage,
   responsesApi,
 });
 
@@ -27,18 +25,13 @@ const functionUrl = responsesApiLambda.addFunctionUrl({
   },
 });
 
-// Grant the Lambda access to the ResponseDownload table
-const responseDownloadTable = backend.data.resources.tables['ResponseDownload'];
-responseDownloadTable.grantReadWriteData(responsesApiLambda);
-
-// Grant the Lambda access to S3 bucket
-const storageBucket = backend.storage.resources.bucket;
-storageBucket.grantRead(responsesApiLambda);
+// Grant the Lambda access to the CuestionarioResponse table
+const cuestionarioResponseTable = backend.data.resources.tables['CuestionarioResponse'];
+cuestionarioResponseTable.grantReadWriteData(responsesApiLambda);
 
 // Add environment variables to Lambda (cast to Function to access addEnvironment)
 const lambdaFn = responsesApiLambda as unknown as Function;
-lambdaFn.addEnvironment('RESPONSE_DOWNLOAD_TABLE_NAME', responseDownloadTable.tableName);
-lambdaFn.addEnvironment('S3_BUCKET_NAME', storageBucket.bucketName);
+lambdaFn.addEnvironment('CUESTIONARIO_RESPONSE_TABLE_NAME', cuestionarioResponseTable.tableName);
 lambdaFn.addEnvironment('EXTERNAL_API_KEY', 'dev-api-key-change-in-production');
 
 // Output the function URL

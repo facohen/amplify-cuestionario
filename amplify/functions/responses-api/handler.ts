@@ -1,15 +1,14 @@
 import type { Handler } from 'aws-lambda';
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
+  QueryCommand,
   ScanCommand,
   GetCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { timingSafeEqual } from 'crypto';
 
-const s3 = new S3Client({});
 const dynamodbClient = new DynamoDBClient({});
 const dynamodb = DynamoDBDocumentClient.from(dynamodbClient);
 
@@ -100,13 +99,6 @@ function validateApiKey(event: FunctionUrlEvent): boolean {
   }
 }
 
-// ============ SECURITY: S3 Path Validation ============
-function isValidS3Path(s3Path: string): boolean {
-  // Only allow paths matching: respuestas/{cuestionarioId}/{tokenId}_{timestamp}.json
-  const pathRegex = /^respuestas\/[\w-]+\/[\w-]+\.json$/;
-  return pathRegex.test(s3Path);
-}
-
 // ============ Main Handler ============
 export const handler: Handler<FunctionUrlEvent, LambdaResponse> = async (event) => {
   const method = event.requestContext?.http?.method || 'GET';
@@ -183,28 +175,60 @@ export const handler: Handler<FunctionUrlEvent, LambdaResponse> = async (event) 
 };
 
 async function listPendingResponses(): Promise<LambdaResponse> {
-  const tableName = process.env.RESPONSE_DOWNLOAD_TABLE_NAME;
+  const tableName = process.env.CUESTIONARIO_RESPONSE_TABLE_NAME;
   if (!tableName) {
     return response(500, { error: 'Configuration error' });
   }
 
-  const result = await dynamodb.send(
-    new ScanCommand({
-      TableName: tableName,
-      FilterExpression: '#status = :status',
-      ExpressionAttributeNames: { '#status': 'status' },
-      ExpressionAttributeValues: { ':status': 'pending' },
-    })
-  );
+  // Use the downloadStatus GSI for efficient query
+  const indexName = process.env.DOWNLOAD_STATUS_INDEX_NAME;
+
+  let result;
+  if (indexName) {
+    // Use GSI query (more efficient)
+    result = await dynamodb.send(
+      new QueryCommand({
+        TableName: tableName,
+        IndexName: indexName,
+        KeyConditionExpression: 'downloadStatus = :status',
+        ExpressionAttributeValues: { ':status': 'pending' },
+      })
+    );
+  } else {
+    // Fallback to scan with filter
+    result = await dynamodb.send(
+      new ScanCommand({
+        TableName: tableName,
+        FilterExpression: 'downloadStatus = :status',
+        ExpressionAttributeValues: { ':status': 'pending' },
+      })
+    );
+  }
+
+  // Map to external format (hide internal details)
+  const responses = (result.Items || []).map(item => ({
+    id: item.id,
+    tokenId: item.tokenId,
+    cuestionarioId: item.cuestionarioId,
+    cuestionarioVersion: item.cuestionarioVersion,
+    cuestionarioTitle: item.cuestionarioTitle,
+    startedAt: item.startedAt,
+    finishedAt: item.finishedAt,
+    totalTimeMs: item.totalTimeMs,
+    totalTimeAdjustedMs: item.totalTimeAdjustedMs,
+    status: item.status,
+    downloadStatus: item.downloadStatus,
+    createdAt: item.createdAt,
+  }));
 
   return response(200, {
-    count: result.Items?.length || 0,
-    responses: result.Items || [],
+    count: responses.length,
+    responses,
   });
 }
 
 async function listAllResponses(): Promise<LambdaResponse> {
-  const tableName = process.env.RESPONSE_DOWNLOAD_TABLE_NAME;
+  const tableName = process.env.CUESTIONARIO_RESPONSE_TABLE_NAME;
   if (!tableName) {
     return response(500, { error: 'Configuration error' });
   }
@@ -215,21 +239,38 @@ async function listAllResponses(): Promise<LambdaResponse> {
     })
   );
 
+  // Map to external format
+  const responses = (result.Items || []).map(item => ({
+    id: item.id,
+    tokenId: item.tokenId,
+    cuestionarioId: item.cuestionarioId,
+    cuestionarioVersion: item.cuestionarioVersion,
+    cuestionarioTitle: item.cuestionarioTitle,
+    startedAt: item.startedAt,
+    finishedAt: item.finishedAt,
+    totalTimeMs: item.totalTimeMs,
+    totalTimeAdjustedMs: item.totalTimeAdjustedMs,
+    status: item.status,
+    downloadStatus: item.downloadStatus,
+    downloadedAt: item.downloadedAt,
+    downloadedBy: item.downloadedBy,
+    createdAt: item.createdAt,
+  }));
+
   return response(200, {
-    count: result.Items?.length || 0,
-    responses: result.Items || [],
+    count: responses.length,
+    responses,
   });
 }
 
 async function downloadAndMarkResponse(id: string): Promise<LambdaResponse> {
-  const tableName = process.env.RESPONSE_DOWNLOAD_TABLE_NAME;
-  const bucketName = process.env.S3_BUCKET_NAME;
+  const tableName = process.env.CUESTIONARIO_RESPONSE_TABLE_NAME;
 
-  if (!tableName || !bucketName) {
+  if (!tableName) {
     return response(500, { error: 'Configuration error' });
   }
 
-  // Get the download record from DynamoDB
+  // Get the response from DynamoDB
   const getResult = await dynamodb.send(
     new GetCommand({
       TableName: tableName,
@@ -242,78 +283,45 @@ async function downloadAndMarkResponse(id: string): Promise<LambdaResponse> {
   }
 
   const record = getResult.Item;
-  const s3Path = record.s3Path as string;
 
-  // SECURITY: Validate S3 path format
-  if (!isValidS3Path(s3Path)) {
-    log('WARN', 'Invalid S3 path format', { id });
-    return response(400, { error: 'Invalid path format' });
-  }
+  // Mark as downloaded in DynamoDB
+  await dynamodb.send(
+    new UpdateCommand({
+      TableName: tableName,
+      Key: { id },
+      UpdateExpression:
+        'SET downloadStatus = :status, downloadedAt = :downloadedAt, downloadedBy = :downloadedBy',
+      ExpressionAttributeValues: {
+        ':status': 'downloaded',
+        ':downloadedAt': new Date().toISOString(),
+        ':downloadedBy': 'external-api',
+      },
+    })
+  );
 
-  // Download the actual response JSON from S3
-  try {
-    const s3Result = await s3.send(
-      new GetObjectCommand({
-        Bucket: bucketName,
-        Key: s3Path,
-      })
-    );
+  log('INFO', 'Response downloaded successfully', { id });
 
-    // SECURITY: Check file size (max 10MB)
-    const contentLength = s3Result.ContentLength || 0;
-    const MAX_FILE_SIZE = 10 * 1024 * 1024;
-    if (contentLength > MAX_FILE_SIZE) {
-      log('WARN', 'File too large', { id, size: contentLength });
-      return response(400, { error: 'File too large' });
-    }
-
-    const responseBody = await s3Result.Body?.transformToString();
-    if (!responseBody) {
-      return response(500, { error: 'Failed to read file' });
-    }
-
-    let responseData;
-    try {
-      responseData = JSON.parse(responseBody);
-    } catch {
-      log('ERROR', 'Invalid JSON in S3', { id });
-      return response(500, { error: 'Invalid file format' });
-    }
-
-    // Mark as downloaded in DynamoDB
-    await dynamodb.send(
-      new UpdateCommand({
-        TableName: tableName,
-        Key: { id },
-        UpdateExpression:
-          'SET #status = :status, downloadedAt = :downloadedAt, downloadedBy = :downloadedBy',
-        ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: {
-          ':status': 'downloaded',
-          ':downloadedAt': new Date().toISOString(),
-          ':downloadedBy': 'external-api',
-        },
-      })
-    );
-
-    log('INFO', 'Response downloaded successfully', { id });
-
-    return response(200, {
-      id,
-      downloadedAt: new Date().toISOString(),
-      response: responseData,
-    });
-  } catch (error) {
-    log('ERROR', 'S3 download error', {
-      id,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    });
-    return response(500, { error: 'Failed to download response' });
-  }
+  // Return the full response data including answers
+  return response(200, {
+    id,
+    downloadedAt: new Date().toISOString(),
+    response: {
+      tokenId: record.tokenId,
+      cuestionarioId: record.cuestionarioId,
+      cuestionarioVersion: record.cuestionarioVersion,
+      cuestionarioTitle: record.cuestionarioTitle,
+      startedAt: record.startedAt,
+      finishedAt: record.finishedAt,
+      totalTimeMs: record.totalTimeMs,
+      totalTimeAdjustedMs: record.totalTimeAdjustedMs,
+      status: record.status,
+      answers: record.answersJson,
+    },
+  });
 }
 
 async function unmarkResponse(id: string): Promise<LambdaResponse> {
-  const tableName = process.env.RESPONSE_DOWNLOAD_TABLE_NAME;
+  const tableName = process.env.CUESTIONARIO_RESPONSE_TABLE_NAME;
   if (!tableName) {
     return response(500, { error: 'Configuration error' });
   }
@@ -324,8 +332,7 @@ async function unmarkResponse(id: string): Promise<LambdaResponse> {
       TableName: tableName,
       Key: { id },
       UpdateExpression:
-        'SET #status = :status, downloadedAt = :downloadedAt, downloadedBy = :downloadedBy',
-      ExpressionAttributeNames: { '#status': 'status' },
+        'SET downloadStatus = :status, downloadedAt = :downloadedAt, downloadedBy = :downloadedBy',
       ExpressionAttributeValues: {
         ':status': 'pending',
         ':downloadedAt': null,

@@ -9,33 +9,18 @@ import { Token } from '../types/token';
 import { Cuestionario } from '../types/cuestionario';
 import { listTokens, createToken, createTokensBatch, revokeToken } from '../services/tokenService';
 import {
-  uploadCuestionario,
-  downloadCuestionario,
+  createCuestionario,
   listCuestionarios,
   deleteCuestionario,
   updateCuestionarioStatus,
-  listRespuestas,
-  downloadRespuesta,
-  StoredResponse,
-} from '../services/cuestionarioStorageService';
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '../../amplify/data/resource';
-
-const client = generateClient<Schema>();
+  listResponses,
+  getResponse,
+  unmarkResponse,
+  StoredResponseData,
+} from '../services/cuestionarioService';
 
 type FilterStatus = 'all' | 'active' | 'used' | 'expired' | 'revoked';
 type AdminTab = 'tokens' | 'cuestionarios' | 'respuestas';
-type DownloadStatus = 'pending' | 'downloaded' | 'unknown';
-
-interface ResponseItem {
-  path: string;
-  cuestionarioId: string;
-  tokenId: string;
-  timestamp: string;
-  data?: StoredResponse;
-  downloadStatus?: DownloadStatus;
-  downloadRecordId?: string;
-}
 
 function AdminPanel() {
   const [activeTab, setActiveTab] = useState<AdminTab>('cuestionarios');
@@ -50,13 +35,13 @@ function AdminPanel() {
   const [selectedCuestionarioId, setSelectedCuestionarioId] = useState<string>('');
 
   // Cuestionario state
-  const [cuestionarios, setCuestionarios] = useState<{ id: string; data?: Cuestionario }[]>([]);
+  const [cuestionarios, setCuestionarios] = useState<Cuestionario[]>([]);
   const [isLoadingCuestionarios, setIsLoadingCuestionarios] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Respuestas state
-  const [respuestas, setRespuestas] = useState<ResponseItem[]>([]);
+  const [respuestas, setRespuestas] = useState<StoredResponseData[]>([]);
   const [isLoadingRespuestas, setIsLoadingRespuestas] = useState(false);
   const [selectedRespuestas, setSelectedRespuestas] = useState<Set<string>>(new Set());
   const [filterCuestionarioId, setFilterCuestionarioId] = useState<string>('');
@@ -74,9 +59,8 @@ function AdminPanel() {
   }, [activeTab, filterCuestionarioId]);
 
   useEffect(() => {
-    // Set default selected cuestionario when list loads
     if (cuestionarios.length > 0 && !selectedCuestionarioId) {
-      setSelectedCuestionarioId(cuestionarios[0].id);
+      setSelectedCuestionarioId(cuestionarios[0].id_cuestionario);
     }
   }, [cuestionarios, selectedCuestionarioId]);
 
@@ -95,15 +79,8 @@ function AdminPanel() {
   async function loadCuestionarios() {
     try {
       setIsLoadingCuestionarios(true);
-      const ids = await listCuestionarios();
-      // Load full data for each cuestionario
-      const loaded = await Promise.all(
-        ids.map(async (id) => {
-          const data = await downloadCuestionario(id);
-          return { id, data: data || undefined };
-        })
-      );
-      setCuestionarios(loaded.filter((c) => c.data));
+      const data = await listCuestionarios();
+      setCuestionarios(data);
     } catch (error) {
       console.error('Error loading cuestionarios:', error);
     } finally {
@@ -114,44 +91,12 @@ function AdminPanel() {
   async function loadRespuestas() {
     try {
       setIsLoadingRespuestas(true);
-      const paths = await listRespuestas(filterCuestionarioId || undefined);
-
-      // Load download status from DynamoDB
-      const downloadRecords = await client.models.ResponseDownload.list();
-      const downloadStatusMap = new Map<string, { status: DownloadStatus; id: string }>();
-      downloadRecords.data?.forEach((record) => {
-        if (record.s3Path) {
-          downloadStatusMap.set(record.s3Path, {
-            status: (record.status as DownloadStatus) || 'unknown',
-            id: record.id,
-          });
-        }
-      });
-
-      // Parse path info: respuestas/{cuestionarioId}/{tokenId}_{timestamp}.json
-      const items: ResponseItem[] = paths
-        .filter(path => path.endsWith('.json'))
-        .map(path => {
-          const parts = path.replace('respuestas/', '').split('/');
-          const cuestionarioId = parts[0] || '';
-          const fileName = parts[1] || '';
-          const [tokenId, ...timestampParts] = fileName.replace('.json', '').split('_');
-          const timestamp = timestampParts.join('_');
-
-          const downloadInfo = downloadStatusMap.get(path);
-
-          return {
-            path,
-            cuestionarioId,
-            tokenId: tokenId || '',
-            timestamp: timestamp || '',
-            downloadStatus: downloadInfo?.status || 'unknown',
-            downloadRecordId: downloadInfo?.id,
-          };
-        })
-        .sort((a, b) => b.timestamp.localeCompare(a.timestamp)); // Most recent first
-
-      setRespuestas(items);
+      const data = await listResponses(filterCuestionarioId || undefined);
+      // Sort by createdAt descending
+      const sorted = data.sort((a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setRespuestas(sorted);
       setSelectedRespuestas(new Set());
     } catch (error) {
       console.error('Error loading respuestas:', error);
@@ -160,19 +105,9 @@ function AdminPanel() {
     }
   }
 
-  async function handleUnmarkResponse(item: ResponseItem) {
-    if (!item.downloadRecordId) {
-      alert('No hay registro de descarga para esta respuesta');
-      return;
-    }
-
+  async function handleUnmarkResponse(item: StoredResponseData) {
     try {
-      await client.models.ResponseDownload.update({
-        id: item.downloadRecordId,
-        status: 'pending',
-        downloadedAt: null,
-        downloadedBy: null,
-      });
+      await unmarkResponse(item.id);
       await loadRespuestas();
     } catch (error) {
       console.error('Error unmarking response:', error);
@@ -180,12 +115,12 @@ function AdminPanel() {
     }
   }
 
-  function toggleSelectRespuesta(path: string) {
+  function toggleSelectRespuesta(id: string) {
     const newSelected = new Set(selectedRespuestas);
-    if (newSelected.has(path)) {
-      newSelected.delete(path);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
     } else {
-      newSelected.add(path);
+      newSelected.add(id);
     }
     setSelectedRespuestas(newSelected);
   }
@@ -194,19 +129,33 @@ function AdminPanel() {
     if (selectedRespuestas.size === respuestas.length) {
       setSelectedRespuestas(new Set());
     } else {
-      setSelectedRespuestas(new Set(respuestas.map(r => r.path)));
+      setSelectedRespuestas(new Set(respuestas.map(r => r.id)));
     }
   }
 
-  async function downloadSingleResponse(item: ResponseItem) {
+  async function downloadSingleResponse(item: StoredResponseData) {
     try {
-      const data = await downloadRespuesta(item.path);
+      const data = await getResponse(item.id);
       if (data) {
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const exportData = {
+          tokenId: data.tokenId,
+          submittedAt: data.createdAt,
+          startedAt: data.startedAt,
+          finishedAt: data.finishedAt,
+          totalTimeMs: data.totalTimeMs,
+          totalTimeAdjustedMs: data.totalTimeAdjustedMs,
+          cuestionario: {
+            id: data.cuestionarioId,
+            version: data.cuestionarioVersion,
+            title: data.cuestionarioTitle,
+          },
+          answers: data.answersJson,
+        };
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `respuesta_${item.tokenId}_${item.timestamp}.json`;
+        a.download = `respuesta_${item.tokenId}_${item.createdAt.replace(/[:.]/g, '-')}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -226,23 +175,35 @@ function AdminPanel() {
 
     try {
       setIsDownloading(true);
-      const selectedItems = respuestas.filter(r => selectedRespuestas.has(r.path));
+      const selectedItems = respuestas.filter(r => selectedRespuestas.has(r.id));
 
-      // Download all selected responses
-      const downloadedData: { fileName: string; data: StoredResponse }[] = [];
+      const downloadedData: { fileName: string; data: unknown }[] = [];
 
       for (const item of selectedItems) {
-        const data = await downloadRespuesta(item.path);
+        const data = await getResponse(item.id);
         if (data) {
+          const exportData = {
+            tokenId: data.tokenId,
+            submittedAt: data.createdAt,
+            startedAt: data.startedAt,
+            finishedAt: data.finishedAt,
+            totalTimeMs: data.totalTimeMs,
+            totalTimeAdjustedMs: data.totalTimeAdjustedMs,
+            cuestionario: {
+              id: data.cuestionarioId,
+              version: data.cuestionarioVersion,
+              title: data.cuestionarioTitle,
+            },
+            answers: data.answersJson,
+          };
           downloadedData.push({
-            fileName: `respuesta_${item.tokenId}_${item.timestamp}.json`,
-            data,
+            fileName: `respuesta_${item.tokenId}_${item.createdAt.replace(/[:.]/g, '-')}.json`,
+            data: exportData,
           });
         }
       }
 
       if (downloadedData.length === 1) {
-        // Single file download
         const { fileName, data } = downloadedData[0];
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -254,7 +215,6 @@ function AdminPanel() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       } else {
-        // Multiple files - create a combined JSON with all responses
         const combined = {
           exportedAt: new Date().toISOString(),
           totalResponses: downloadedData.length,
@@ -280,17 +240,11 @@ function AdminPanel() {
     }
   }
 
-  function formatTimestamp(timestamp: string): string {
-    // Format: 2024-01-15T10-30-45-123Z -> 15/01/2024 10:30:45
+  function formatDate(dateString: string): string {
     try {
-      const isoString = timestamp.replace(/-/g, (m, i) => (i > 9 ? ':' : m)).replace('T', ' ');
-      const date = new Date(isoString);
-      if (isNaN(date.getTime())) {
-        return timestamp;
-      }
-      return date.toLocaleString();
+      return new Date(dateString).toLocaleString();
     } catch {
-      return timestamp;
+      return dateString;
     }
   }
 
@@ -303,17 +257,15 @@ function AdminPanel() {
       const text = await file.text();
       const cuestionario = JSON.parse(text) as Cuestionario;
 
-      // Validate basic structure
       if (!cuestionario.id_cuestionario || !cuestionario.questions) {
-        throw new Error('Archivo JSON inválido: falta id_cuestionario o questions');
+        throw new Error('Archivo JSON invalido: falta id_cuestionario o questions');
       }
 
-      // Ensure new uploads default to draft status
       if (!cuestionario.status) {
         cuestionario.status = 'draft';
       }
 
-      await uploadCuestionario(cuestionario);
+      await createCuestionario(cuestionario);
       await loadCuestionarios();
       alert('Cuestionario subido exitosamente');
     } catch (error) {
@@ -328,13 +280,12 @@ function AdminPanel() {
   }
 
   async function handleDeleteCuestionario(cuestionarioId: string, status?: string) {
-    // Prevent deletion of active cuestionarios
     if (status === 'active') {
-      alert('No se puede eliminar un cuestionario activo. Primero desactívalo o archívalo.');
+      alert('No se puede eliminar un cuestionario activo. Primero desactivalo o archivalo.');
       return;
     }
 
-    if (!confirm(`¿Estás seguro de eliminar el cuestionario "${cuestionarioId}"?`)) return;
+    if (!confirm(`Estas seguro de eliminar el cuestionario "${cuestionarioId}"?`)) return;
 
     try {
       await deleteCuestionario(cuestionarioId);
@@ -351,14 +302,12 @@ function AdminPanel() {
   async function handleActivateCuestionario(cuestionarioId: string) {
     try {
       console.log('Activating cuestionario:', cuestionarioId);
-      // First, deactivate all other cuestionarios that are currently active
       for (const c of cuestionarios) {
-        if (c.data?.status === 'active' && c.id !== cuestionarioId) {
-          console.log('Deactivating cuestionario:', c.id);
-          await updateCuestionarioStatus(c.id, 'draft');
+        if (c.status === 'active' && c.id_cuestionario !== cuestionarioId) {
+          console.log('Deactivating cuestionario:', c.id_cuestionario);
+          await updateCuestionarioStatus(c.id_cuestionario, 'draft');
         }
       }
-      // Activate the selected one
       console.log('Setting cuestionario to active:', cuestionarioId);
       await updateCuestionarioStatus(cuestionarioId, 'active');
       console.log('Cuestionario activated, reloading list...');
@@ -472,7 +421,7 @@ function AdminPanel() {
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
             Panel de Administracion
           </h1>
-          <p className="text-gray-600 mb-6">Gestión de cuestionarios y tokens</p>
+          <p className="text-gray-600 mb-6">Gestion de cuestionarios y tokens</p>
         </motion.div>
 
         {/* Tabs */}
@@ -485,7 +434,7 @@ function AdminPanel() {
                 : 'bg-white text-gray-700 hover:bg-gray-50'
             }`}
           >
-            📋 Cuestionarios
+            Cuestionarios
           </button>
           <button
             onClick={() => setActiveTab('tokens')}
@@ -495,7 +444,7 @@ function AdminPanel() {
                 : 'bg-white text-gray-700 hover:bg-gray-50'
             }`}
           >
-            🎫 Tokens
+            Tokens
           </button>
           <button
             onClick={() => setActiveTab('respuestas')}
@@ -505,14 +454,13 @@ function AdminPanel() {
                 : 'bg-white text-gray-700 hover:bg-gray-50'
             }`}
           >
-            📊 Respuestas
+            Respuestas
           </button>
         </div>
 
         {/* Cuestionarios Tab */}
         {activeTab === 'cuestionarios' && (
           <>
-            {/* Upload cuestionario */}
             <Card className="mb-6">
               <h2 className="text-lg font-semibold text-gray-800 mb-4">Subir Cuestionario</h2>
               <p className="text-sm text-gray-600 mb-4">
@@ -538,7 +486,6 @@ function AdminPanel() {
               </div>
             </Card>
 
-            {/* Cuestionarios list */}
             <Card>
               <h2 className="text-lg font-semibold text-gray-800 mb-4">
                 Cuestionarios ({cuestionarios.length})
@@ -557,13 +504,13 @@ function AdminPanel() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {cuestionarios.map(({ id, data }) => (
+                  {cuestionarios.map((cuestionario) => (
                     <motion.div
-                      key={id}
+                      key={cuestionario.id_cuestionario}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       className={`p-4 border-2 rounded-lg transition-colors ${
-                        data?.status === 'active'
+                        cuestionario.status === 'active'
                           ? 'border-green-400 bg-green-50'
                           : 'border-gray-200 hover:border-fuchsia-300'
                       }`}
@@ -572,65 +519,64 @@ function AdminPanel() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <h3 className="font-semibold text-gray-800">
-                              {data?.title || id}
+                              {cuestionario.title}
                             </h3>
-                            {data?.status === 'active' && (
+                            {cuestionario.status === 'active' && (
                               <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full font-medium">
                                 ACTIVO
                               </span>
                             )}
                           </div>
                           <p className="text-sm text-gray-600 mt-1">
-                            {data?.description}
+                            {cuestionario.description}
                           </p>
                           <div className="flex gap-4 mt-2 text-xs text-gray-500">
-                            <span>ID: {id}</span>
-                            <span>Versión: {data?.version}</span>
-                            <span>Preguntas: {data?.total_questions}</span>
+                            <span>ID: {cuestionario.id_cuestionario}</span>
+                            <span>Version: {cuestionario.version}</span>
+                            <span>Preguntas: {cuestionario.total_questions}</span>
                             <span className={`px-2 py-0.5 rounded-full ${
-                              data?.status === 'active' ? 'bg-green-100 text-green-700' :
-                              data?.status === 'draft' ? 'bg-yellow-100 text-yellow-700' :
+                              cuestionario.status === 'active' ? 'bg-green-100 text-green-700' :
+                              cuestionario.status === 'draft' ? 'bg-yellow-100 text-yellow-700' :
                               'bg-gray-100 text-gray-700'
                             }`}>
-                              {data?.status || 'draft'}
+                              {cuestionario.status || 'draft'}
                             </span>
                           </div>
                         </div>
                         <div className="flex gap-2 items-center">
-                          {/* Status action buttons */}
-                          {data?.status !== 'active' && (
+                          {cuestionario.status !== 'active' && (
                             <button
-                              onClick={() => handleActivateCuestionario(id)}
+                              onClick={() => handleActivateCuestionario(cuestionario.id_cuestionario)}
                               className="text-green-600 hover:text-green-800 text-sm font-medium px-3 py-1 border border-green-300 rounded hover:bg-green-50"
                             >
                               Activar
                             </button>
                           )}
-                          {data?.status === 'active' && (
+                          {cuestionario.status === 'active' && (
                             <button
-                              onClick={() => handleDraftCuestionario(id)}
+                              onClick={() => handleDraftCuestionario(cuestionario.id_cuestionario)}
                               className="text-yellow-600 hover:text-yellow-800 text-sm font-medium px-3 py-1 border border-yellow-300 rounded hover:bg-yellow-50"
                             >
                               Desactivar
                             </button>
                           )}
-                          {data?.status !== 'archived' && data?.status !== 'active' && (
+                          {cuestionario.status !== 'archived' && cuestionario.status !== 'active' && (
                             <button
-                              onClick={() => handleArchiveCuestionario(id)}
+                              onClick={() => handleArchiveCuestionario(cuestionario.id_cuestionario)}
                               className="text-gray-600 hover:text-gray-800 text-sm font-medium px-3 py-1 border border-gray-300 rounded hover:bg-gray-50"
                             >
                               Archivar
                             </button>
                           )}
                           <button
-                            onClick={() => handleDeleteCuestionario(id, data?.status)}
-                            disabled={data?.status === 'active'}
+                            onClick={() => handleDeleteCuestionario(cuestionario.id_cuestionario, cuestionario.status)}
+                            disabled={cuestionario.status === 'active'}
                             className={`text-sm font-medium px-3 py-1 border rounded ${
-                              data?.status === 'active'
+                              cuestionario.status === 'active'
                                 ? 'text-gray-400 border-gray-200 cursor-not-allowed'
                                 : 'text-red-600 hover:text-red-800 border-red-300 hover:bg-red-50'
                             }`}
-                            title={data?.status === 'active' ? 'No se puede eliminar un cuestionario activo' : ''}
+                            title={cuestionario.status === 'active' ? 'No se puede eliminar un cuestionario activo' : ''}
                           >
                             Eliminar
                           </button>
@@ -647,7 +593,6 @@ function AdminPanel() {
         {/* Tokens Tab */}
         {activeTab === 'tokens' && (
           <>
-            {/* Select cuestionario + Create tokens */}
             <Card className="mb-6">
               <h2 className="text-lg font-semibold text-gray-800 mb-4">Crear Tokens</h2>
 
@@ -659,9 +604,9 @@ function AdminPanel() {
                   className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-fuchsia-500 focus:border-transparent"
                 >
                   <option value="">Selecciona un cuestionario</option>
-                  {cuestionarios.map(({ id, data }) => (
-                    <option key={id} value={id}>
-                      {data?.title || id}
+                  {cuestionarios.map((c) => (
+                    <option key={c.id_cuestionario} value={c.id_cuestionario}>
+                      {c.title}
                     </option>
                   ))}
                 </select>
@@ -700,7 +645,6 @@ function AdminPanel() {
               </div>
             </Card>
 
-            {/* Filters */}
             <Card className="mb-6">
               <div className="flex flex-wrap gap-2">
                 {(['all', 'active', 'used', 'expired', 'revoked'] as FilterStatus[]).map((status) => (
@@ -720,7 +664,6 @@ function AdminPanel() {
               </div>
             </Card>
 
-            {/* Tokens list */}
             <Card>
               <h2 className="text-lg font-semibold text-gray-800 mb-4">
                 Tokens ({filteredTokens.length})
@@ -809,7 +752,6 @@ function AdminPanel() {
         {/* Respuestas Tab */}
         {activeTab === 'respuestas' && (
           <>
-            {/* Filter and actions */}
             <Card className="mb-6">
               <div className="flex flex-wrap gap-4 items-end justify-between">
                 <div>
@@ -820,9 +762,9 @@ function AdminPanel() {
                     className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-fuchsia-500 focus:border-transparent"
                   >
                     <option value="">Todos los cuestionarios</option>
-                    {cuestionarios.map(({ id, data }) => (
-                      <option key={id} value={id}>
-                        {data?.title || id}
+                    {cuestionarios.map((c) => (
+                      <option key={c.id_cuestionario} value={c.id_cuestionario}>
+                        {c.title}
                       </option>
                     ))}
                   </select>
@@ -850,7 +792,6 @@ function AdminPanel() {
               </div>
             </Card>
 
-            {/* Respuestas list */}
             <Card>
               <h2 className="text-lg font-semibold text-gray-800 mb-4">
                 Respuestas ({respuestas.length})
@@ -864,7 +805,7 @@ function AdminPanel() {
                 <div className="text-center py-8">
                   <p className="text-gray-500 mb-4">No hay respuestas</p>
                   <p className="text-sm text-gray-400">
-                    Las respuestas aparecerán aquí cuando los usuarios completen cuestionarios
+                    Las respuestas apareceran aqui cuando los usuarios completen cuestionarios
                   </p>
                 </div>
               ) : (
@@ -890,18 +831,18 @@ function AdminPanel() {
                     <tbody>
                       {respuestas.map((item) => (
                         <motion.tr
-                          key={item.path}
+                          key={item.id}
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           className={`border-b border-gray-100 hover:bg-gray-50 ${
-                            selectedRespuestas.has(item.path) ? 'bg-fuchsia-50' : ''
+                            selectedRespuestas.has(item.id) ? 'bg-fuchsia-50' : ''
                           }`}
                         >
                           <td className="py-3 px-2">
                             <input
                               type="checkbox"
-                              checked={selectedRespuestas.has(item.path)}
-                              onChange={() => toggleSelectRespuesta(item.path)}
+                              checked={selectedRespuestas.has(item.id)}
+                              onChange={() => toggleSelectRespuesta(item.id)}
                               className="rounded border-gray-300 text-fuchsia-600 focus:ring-fuchsia-500"
                             />
                           </td>
@@ -911,10 +852,10 @@ function AdminPanel() {
                             </code>
                           </td>
                           <td className="py-3 px-2 text-gray-600 text-xs">
-                            {item.cuestionarioId}
+                            {item.cuestionarioTitle || item.cuestionarioId}
                           </td>
                           <td className="py-3 px-2 text-gray-600">
-                            {formatTimestamp(item.timestamp)}
+                            {formatDate(item.createdAt)}
                           </td>
                           <td className="py-3 px-2">
                             {item.downloadStatus === 'downloaded' ? (
@@ -929,13 +870,9 @@ function AdminPanel() {
                                   Desmarcar
                                 </button>
                               </span>
-                            ) : item.downloadStatus === 'pending' ? (
+                            ) : (
                               <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
                                 Pendiente
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
-                                Sin registro
                               </span>
                             )}
                           </td>

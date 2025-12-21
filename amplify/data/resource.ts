@@ -14,24 +14,7 @@ const schema = a.schema({
       allow.authenticated().to(['create', 'read', 'update', 'delete']),
     ]),
 
-  // Tracking de descargas de respuestas para API externa
-  ResponseDownload: a
-    .model({
-      s3Path: a.string().required(),
-      cuestionarioId: a.string().required(),
-      tokenId: a.string().required(),
-      submittedAt: a.datetime().required(),
-      downloadedAt: a.datetime(),
-      downloadedBy: a.string(),
-      status: a.enum(['pending', 'downloaded']),
-    })
-    .authorization((allow) => [
-      allow.publicApiKey().to(['create', 'read', 'update']),
-      allow.authenticated().to(['create', 'read', 'update', 'delete']),
-    ])
-    .secondaryIndexes((index) => [index('status')]),
-
-  // Definición del cuestionario
+  // Definición del cuestionario (migrado de S3)
   CuestionarioDefinition: a
     .model({
       version: a.string().required(),
@@ -47,21 +30,39 @@ const schema = a.schema({
       allow.authenticated().to(['create', 'read', 'update', 'delete']),
     ]),
 
-  // Respuestas del cuestionario
+  // Respuestas del cuestionario (migrado de S3, fusionado con ResponseDownload)
   CuestionarioResponse: a
     .model({
+      // Identificación
       tokenId: a.string().required(),
       cuestionarioId: a.string().required(),
       cuestionarioVersion: a.string().required(),
+      cuestionarioTitle: a.string(),
+
+      // Tiempos
       startedAt: a.datetime().required(),
       finishedAt: a.datetime(),
       totalTimeMs: a.integer(),
+      totalTimeAdjustedMs: a.integer(),
+
+      // Respuestas (JSON con array de EnrichedAnswer)
       answersJson: a.json().required(),
+
+      // Estado del cuestionario
       status: a.enum(['in_progress', 'completed', 'abandoned']),
+
+      // Estado de descarga (antes en ResponseDownload)
+      downloadStatus: a.enum(['pending', 'downloaded']),
+      downloadedAt: a.datetime(),
+      downloadedBy: a.string(),
     })
     .authorization((allow) => [
-      allow.publicApiKey().to(['create', 'update']),
-      allow.authenticated().to(['read', 'delete']),
+      allow.publicApiKey().to(['create', 'read']),
+      allow.authenticated().to(['create', 'read', 'update', 'delete']),
+    ])
+    .secondaryIndexes((index) => [
+      index('cuestionarioId'),
+      index('downloadStatus'),
     ]),
 });
 

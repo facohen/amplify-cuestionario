@@ -5,7 +5,7 @@ import { Cuestionario, AnswerMetrics, CuestionarioResponse } from '../types/cues
 import { useToken } from '../hooks/useToken';
 import { useGameProgress } from '../hooks/useGameProgress';
 import { useSubmitResponse } from '../hooks/useSubmitResponse';
-import { getActiveCuestionario } from '../services/cuestionarioStorageService';
+import { getActiveCuestionario } from '../services/cuestionarioService';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import ProgressBar from '../components/ui/ProgressBar';
@@ -37,7 +37,7 @@ export default function QuestionnaireScreen() {
   // Screen state
   const [screenState, setScreenState] = useState<ScreenState>('loading');
 
-  // Cuestionario data loaded from S3
+  // Cuestionario data loaded from DynamoDB
   const [cuestionarioData, setCuestionarioData] = useState<Cuestionario | null>(null);
 
   // Questionnaire state
@@ -166,7 +166,7 @@ export default function QuestionnaireScreen() {
       });
     } catch (error) {
       console.error('Error completing questionnaire:', error);
-      // Still navigate to completed even if S3 fails
+      // Still navigate to completed even if DynamoDB fails
       navigate('/completed', {
         state: {
           totalTime,
