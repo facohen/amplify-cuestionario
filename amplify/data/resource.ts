@@ -57,7 +57,7 @@ const schema = a.schema({
       downloadedBy: a.string(),
     })
     .authorization((allow) => [
-      allow.publicApiKey().to(['create', 'read']),
+      allow.publicApiKey().to(['create']),
       allow.authenticated().to(['create', 'read', 'update', 'delete']),
     ])
     .secondaryIndexes((index) => [

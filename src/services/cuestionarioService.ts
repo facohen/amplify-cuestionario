@@ -2,7 +2,11 @@ import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
 import { Cuestionario, CuestionarioResponse, CuestionarioStatus, AnswerMetrics, Question } from '../types/cuestionario';
 
+// Cliente público (API Key) para operaciones de lectura pública
 const client = generateClient<Schema>();
+
+// Cliente autenticado (Cognito) para operaciones de admin
+const authClient = generateClient<Schema>({ authMode: 'userPool' });
 
 // Constantes para el ajuste de tiempo por badges
 const BADGE_POPUP_DURATION_MS = 4000;
@@ -41,10 +45,45 @@ export interface StoredResponseData {
   updatedAt: string;
 }
 
+// ============ HELPERS ============
+
+function parseQuestionsJson(questionsJson: unknown): Question[] {
+  if (!questionsJson) return [];
+  if (typeof questionsJson === 'string') {
+    try {
+      return JSON.parse(questionsJson) as Question[];
+    } catch {
+      console.error('Failed to parse questionsJson string');
+      return [];
+    }
+  }
+  if (Array.isArray(questionsJson)) {
+    return questionsJson as Question[];
+  }
+  return [];
+}
+
+function parseAnswersJson(answersJson: unknown): EnrichedAnswer[] {
+  if (!answersJson) return [];
+  if (typeof answersJson === 'string') {
+    try {
+      return JSON.parse(answersJson) as EnrichedAnswer[];
+    } catch {
+      console.error('Failed to parse answersJson string');
+      return [];
+    }
+  }
+  if (Array.isArray(answersJson)) {
+    return answersJson as EnrichedAnswer[];
+  }
+  return [];
+}
+
 // ============ CUESTIONARIOS ============
 
 export async function createCuestionario(cuestionario: Cuestionario): Promise<string> {
-  const result = await client.models.CuestionarioDefinition.create({
+  // Usar authClient porque create requiere autenticación
+  const result = await authClient.models.CuestionarioDefinition.create({
     id: cuestionario.id_cuestionario,
     version: cuestionario.version,
     title: cuestionario.title,
@@ -52,7 +91,7 @@ export async function createCuestionario(cuestionario: Cuestionario): Promise<st
     totalQuestions: cuestionario.total_questions,
     creadoPor: cuestionario.creado_por,
     status: cuestionario.status || 'draft',
-    questionsJson: cuestionario.questions,
+    questionsJson: JSON.stringify(cuestionario.questions),
   });
 
   if (result.errors) {
@@ -79,7 +118,7 @@ export async function listCuestionarios(): Promise<Cuestionario[]> {
     total_questions: item.totalQuestions,
     creado_por: item.creadoPor || '',
     status: (item.status as CuestionarioStatus) || 'draft',
-    questions: (item.questionsJson as Question[]) || [],
+    questions: parseQuestionsJson(item.questionsJson),
   }));
 }
 
@@ -100,7 +139,7 @@ export async function getCuestionario(id: string): Promise<Cuestionario | null> 
     total_questions: item.totalQuestions,
     creado_por: item.creadoPor || '',
     status: (item.status as CuestionarioStatus) || 'draft',
-    questions: (item.questionsJson as Question[]) || [],
+    questions: parseQuestionsJson(item.questionsJson),
   };
 }
 
@@ -123,14 +162,15 @@ export async function getActiveCuestionario(): Promise<Cuestionario | null> {
     total_questions: item.totalQuestions,
     creado_por: item.creadoPor || '',
     status: 'active',
-    questions: (item.questionsJson as Question[]) || [],
+    questions: parseQuestionsJson(item.questionsJson),
   };
 }
 
 export async function updateCuestionarioStatus(id: string, status: CuestionarioStatus): Promise<void> {
   console.log('updateCuestionarioStatus:', id, status);
 
-  const result = await client.models.CuestionarioDefinition.update({
+  // Usar authClient porque update requiere autenticación
+  const result = await authClient.models.CuestionarioDefinition.update({
     id,
     status,
   });
@@ -143,7 +183,8 @@ export async function updateCuestionarioStatus(id: string, status: CuestionarioS
 }
 
 export async function deleteCuestionario(id: string): Promise<void> {
-  const result = await client.models.CuestionarioDefinition.delete({ id });
+  // Usar authClient porque delete requiere autenticación
+  const result = await authClient.models.CuestionarioDefinition.delete({ id });
 
   if (result.errors) {
     throw new Error(result.errors.map(e => e.message).join(', '));
@@ -190,12 +231,18 @@ export async function submitResponse(
   tokenId: string,
   cuestionario: Cuestionario
 ): Promise<string> {
+  console.log('submitResponse called:', { tokenId, cuestionarioId: cuestionario.id_cuestionario });
+
   const enrichedAnswers = enrichAnswers(response.answers, cuestionario);
+  console.log('Enriched answers count:', enrichedAnswers.length);
+  console.log('Sample enriched answer:', enrichedAnswers[0]);
 
   const totalPopupTime = enrichedAnswers.filter((a) => a.had_badge_popup).length * BADGE_POPUP_DURATION_MS;
   const totalTimeAdjusted = Math.max(0, response.total_time_ms - totalPopupTime);
 
-  const result = await client.models.CuestionarioResponse.create({
+  // Incluir todos los campos - el schema en producción debe estar actualizado
+  // Si hay campos faltantes, hacer deploy del schema
+  const payload = {
     tokenId,
     cuestionarioId: cuestionario.id_cuestionario,
     cuestionarioVersion: cuestionario.version,
@@ -204,53 +251,80 @@ export async function submitResponse(
     finishedAt: response.finished_at,
     totalTimeMs: response.total_time_ms,
     totalTimeAdjustedMs: totalTimeAdjusted,
-    answersJson: enrichedAnswers,
-    status: 'completed',
-    downloadStatus: 'pending',
+    answersJson: JSON.stringify(enrichedAnswers),
+    status: 'completed' as const,
+    downloadStatus: 'pending' as const,
+  };
+
+  console.log('Creating CuestionarioResponse with payload:', {
+    ...payload,
+    answersJson: `[${enrichedAnswers.length} answers]`
   });
 
-  if (result.errors) {
-    throw new Error(result.errors.map(e => e.message).join(', '));
-  }
+  try {
+    const result = await client.models.CuestionarioResponse.create(payload);
 
-  console.log('Response submitted:', result.data?.id);
-  return result.data?.id || '';
+    if (result.errors) {
+      console.error('GraphQL errors creating response:', result.errors);
+      throw new Error(result.errors.map(e => e.message).join(', '));
+    }
+
+    console.log('Response submitted successfully:', result.data?.id);
+    return result.data?.id || '';
+  } catch (error) {
+    console.error('Exception creating CuestionarioResponse:', error);
+    throw error;
+  }
 }
 
 export async function listResponses(cuestionarioId?: string): Promise<StoredResponseData[]> {
-  const result = cuestionarioId
-    ? await client.models.CuestionarioResponse.list({
-        filter: { cuestionarioId: { eq: cuestionarioId } },
-      })
-    : await client.models.CuestionarioResponse.list();
+  console.log('listResponses called, cuestionarioId:', cuestionarioId);
 
-  if (result.errors) {
-    console.error('Error listing responses:', result.errors);
+  try {
+    // Usar authClient porque read de responses requiere autenticación
+    const result = cuestionarioId
+      ? await authClient.models.CuestionarioResponse.list({
+          filter: { cuestionarioId: { eq: cuestionarioId } },
+        })
+      : await authClient.models.CuestionarioResponse.list();
+
+    console.log('listResponses result:', {
+      dataCount: result.data?.length || 0,
+      errors: result.errors
+    });
+
+    if (result.errors) {
+      console.error('Error listing responses:', result.errors);
+      return [];
+    }
+
+    return (result.data || []).map((item) => ({
+      id: item.id,
+      tokenId: item.tokenId,
+      cuestionarioId: item.cuestionarioId,
+      cuestionarioVersion: item.cuestionarioVersion,
+      cuestionarioTitle: item.cuestionarioTitle || null,
+      startedAt: item.startedAt,
+      finishedAt: item.finishedAt || null,
+      totalTimeMs: item.totalTimeMs || null,
+      totalTimeAdjustedMs: item.totalTimeAdjustedMs || null,
+      answersJson: parseAnswersJson(item.answersJson),
+      status: (item.status as 'in_progress' | 'completed' | 'abandoned') || 'completed',
+      downloadStatus: (item.downloadStatus as 'pending' | 'downloaded') || 'pending',
+      downloadedAt: item.downloadedAt || null,
+      downloadedBy: item.downloadedBy || null,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }));
+  } catch (error) {
+    console.error('Exception in listResponses:', error);
     return [];
   }
-
-  return (result.data || []).map((item) => ({
-    id: item.id,
-    tokenId: item.tokenId,
-    cuestionarioId: item.cuestionarioId,
-    cuestionarioVersion: item.cuestionarioVersion,
-    cuestionarioTitle: item.cuestionarioTitle || null,
-    startedAt: item.startedAt,
-    finishedAt: item.finishedAt || null,
-    totalTimeMs: item.totalTimeMs || null,
-    totalTimeAdjustedMs: item.totalTimeAdjustedMs || null,
-    answersJson: (item.answersJson as EnrichedAnswer[]) || [],
-    status: (item.status as 'in_progress' | 'completed' | 'abandoned') || 'completed',
-    downloadStatus: (item.downloadStatus as 'pending' | 'downloaded') || 'pending',
-    downloadedAt: item.downloadedAt || null,
-    downloadedBy: item.downloadedBy || null,
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
-  }));
 }
 
 export async function getResponse(id: string): Promise<StoredResponseData | null> {
-  const result = await client.models.CuestionarioResponse.get({ id });
+  // Usar authClient porque read de responses requiere autenticación
+  const result = await authClient.models.CuestionarioResponse.get({ id });
 
   if (result.errors || !result.data) {
     console.error('Error getting response:', result.errors);
@@ -268,7 +342,7 @@ export async function getResponse(id: string): Promise<StoredResponseData | null
     finishedAt: item.finishedAt || null,
     totalTimeMs: item.totalTimeMs || null,
     totalTimeAdjustedMs: item.totalTimeAdjustedMs || null,
-    answersJson: (item.answersJson as EnrichedAnswer[]) || [],
+    answersJson: parseAnswersJson(item.answersJson),
     status: (item.status as 'in_progress' | 'completed' | 'abandoned') || 'completed',
     downloadStatus: (item.downloadStatus as 'pending' | 'downloaded') || 'pending',
     downloadedAt: item.downloadedAt || null,
@@ -279,7 +353,8 @@ export async function getResponse(id: string): Promise<StoredResponseData | null
 }
 
 export async function markResponseDownloaded(id: string, downloadedBy: string): Promise<void> {
-  const result = await client.models.CuestionarioResponse.update({
+  // Usar authClient porque update requiere autenticación
+  const result = await authClient.models.CuestionarioResponse.update({
     id,
     downloadStatus: 'downloaded',
     downloadedAt: new Date().toISOString(),
@@ -294,7 +369,8 @@ export async function markResponseDownloaded(id: string, downloadedBy: string): 
 }
 
 export async function unmarkResponse(id: string): Promise<void> {
-  const result = await client.models.CuestionarioResponse.update({
+  // Usar authClient porque update requiere autenticación
+  const result = await authClient.models.CuestionarioResponse.update({
     id,
     downloadStatus: 'pending',
     downloadedAt: null,
@@ -309,7 +385,8 @@ export async function unmarkResponse(id: string): Promise<void> {
 }
 
 export async function listPendingResponses(): Promise<StoredResponseData[]> {
-  const result = await client.models.CuestionarioResponse.list({
+  // Usar authClient porque read de responses requiere autenticación
+  const result = await authClient.models.CuestionarioResponse.list({
     filter: { downloadStatus: { eq: 'pending' } },
   });
 
@@ -328,7 +405,7 @@ export async function listPendingResponses(): Promise<StoredResponseData[]> {
     finishedAt: item.finishedAt || null,
     totalTimeMs: item.totalTimeMs || null,
     totalTimeAdjustedMs: item.totalTimeAdjustedMs || null,
-    answersJson: (item.answersJson as EnrichedAnswer[]) || [],
+    answersJson: parseAnswersJson(item.answersJson),
     status: (item.status as 'in_progress' | 'completed' | 'abandoned') || 'completed',
     downloadStatus: 'pending',
     downloadedAt: null,
