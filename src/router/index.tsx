@@ -9,6 +9,8 @@ const CompletedScreen = lazy(() => import("../screens/CompletedScreen"));
 const InvalidTokenScreen = lazy(() => import("../screens/InvalidTokenScreen"));
 const TermsScreen = lazy(() => import("../screens/TermsScreen"));
 const AdminScreen = lazy(() => import("../screens/AdminScreen"));
+const EncuestaScreen = lazy(() => import("../screens/EncuestaScreen"));
+const EncuestaGraciasScreen = lazy(() => import("../screens/EncuestaGraciasScreen"));
 
 function PageLoader() {
   return (
@@ -58,6 +60,14 @@ const router = createBrowserRouter([
   {
     path: "/asistida/:token",
     element: withSuspense(AssistedQuestionnaireScreen),
+  },
+  {
+    path: "/encuesta",
+    element: withSuspense(EncuestaScreen),
+  },
+  {
+    path: "/encuesta/gracias",
+    element: withSuspense(EncuestaGraciasScreen),
   },
 ]);
 

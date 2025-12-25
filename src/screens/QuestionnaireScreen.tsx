@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Cuestionario, AnswerMetrics, CuestionarioResponse } from '../types/cuestionario';
 import { useToken } from '../hooks/useToken';
 import { useGameProgress } from '../hooks/useGameProgress';
 import { useSubmitResponse } from '../hooks/useSubmitResponse';
-import { getActiveCuestionario, submitAbandonedResponse, RespondentInfo } from '../services/cuestionarioService';
+import { getActiveCuestionario, submitAbandonedResponse, RespondentInfo, AdministratorInfo } from '../services/cuestionarioService';
 import { getTokenById } from '../services/tokenService';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -28,6 +28,10 @@ interface QuestionnaireScreenProps {
 export default function QuestionnaireScreen({ assistedMode = false }: QuestionnaireScreenProps) {
   const { token: tokenId } = useParams<{ token: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Get administrator info from navigation state (for assisted mode)
+  const adminFromState = location.state as { adminEmail?: string; adminName?: string } | null;
 
   // Token validation
   const { isLoading: tokenLoading, isValid, token, error: tokenError, markAsUsed } = useToken(tokenId);
@@ -41,6 +45,7 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
 
   // Screen state
   const [screenState, setScreenState] = useState<ScreenState>('loading');
+  const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
 
   // Cuestionario data loaded from DynamoDB
   const [cuestionarioData, setCuestionarioData] = useState<Cuestionario | null>(null);
@@ -238,12 +243,46 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
     try {
       // Limpiar localStorage antes de enviar - el cuestionario se completó
       localStorage.removeItem('abandoned_questionnaire');
-      await submitResponse(response, tokenId!, cuestionarioData, respondentData);
+
+      // Preparar info del administrador si existe
+      const administratorInfo: AdministratorInfo | null = adminFromState?.adminEmail
+        ? { email: adminFromState.adminEmail, name: adminFromState.adminName }
+        : null;
+
+      const responseId = await submitResponse(response, tokenId!, cuestionarioData, respondentData, administratorInfo);
       await markAsUsed();
 
-      // En modo asistido, volver al admin con mensaje de éxito
+      // En modo asistido, ir a pantalla de agradecimiento
       if (assistedMode) {
-        navigate('/admin?completed=true');
+        navigate('/encuesta/gracias', {
+          state: {
+            totalTime,
+            totalQuestions: cuestionarioData.total_questions,
+            respondentName: respondentData?.name,
+            responseId,
+          },
+        });
+      } else {
+        navigate('/completed', {
+          state: {
+            totalTime,
+            totalQuestions: cuestionarioData.total_questions,
+            responseId,
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Error completing questionnaire:', error);
+      // Still navigate even if DynamoDB fails
+      if (assistedMode) {
+        navigate('/encuesta/gracias', {
+          state: {
+            totalTime,
+            totalQuestions: cuestionarioData.total_questions,
+            respondentName: respondentData?.name,
+            responseId: null,
+          },
+        });
       } else {
         navigate('/completed', {
           state: {
@@ -252,16 +291,83 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
           },
         });
       }
-    } catch (error) {
-      console.error('Error completing questionnaire:', error);
-      // Still navigate even if DynamoDB fails
+    }
+  }
+
+  async function handleAbandon() {
+    if (!cuestionarioData || !startedAt) return;
+
+    setScreenState('submitting');
+
+    const totalTime = Date.now() - new Date(startedAt).getTime();
+
+    // Preparar info del administrador si existe
+    const administratorInfo: AdministratorInfo | null = adminFromState?.adminEmail
+      ? { email: adminFromState.adminEmail, name: adminFromState.adminName }
+      : null;
+
+    // Crear respuesta con status abandoned
+    const response: CuestionarioResponse = {
+      response_id: generateId(),
+      cuestionario_id: cuestionarioData.id_cuestionario,
+      cuestionario_version: cuestionarioData.version,
+      started_at: startedAt,
+      finished_at: new Date().toISOString(),
+      total_time_ms: totalTime,
+      answers: answers,
+    };
+
+    try {
+      // Limpiar localStorage
+      localStorage.removeItem('abandoned_questionnaire');
+
+      const responseId = await submitResponse(response, tokenId!, cuestionarioData, respondentData, administratorInfo);
+      await markAsUsed();
+
+      // Navegar a pantalla de feedback con modo abandono
       if (assistedMode) {
-        navigate('/admin?completed=true');
+        navigate('/encuesta/gracias', {
+          state: {
+            totalTime,
+            totalQuestions: cuestionarioData.total_questions,
+            respondentName: respondentData?.name,
+            responseId,
+            isAbandoned: true,
+            abandonedAtQuestion: currentQuestion + 1,
+          },
+        });
       } else {
         navigate('/completed', {
           state: {
             totalTime,
             totalQuestions: cuestionarioData.total_questions,
+            responseId,
+            isAbandoned: true,
+            abandonedAtQuestion: currentQuestion + 1,
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Error abandoning questionnaire:', error);
+      // Navegar igual aunque falle
+      if (assistedMode) {
+        navigate('/encuesta/gracias', {
+          state: {
+            totalTime,
+            totalQuestions: cuestionarioData.total_questions,
+            respondentName: respondentData?.name,
+            responseId: null,
+            isAbandoned: true,
+            abandonedAtQuestion: currentQuestion + 1,
+          },
+        });
+      } else {
+        navigate('/completed', {
+          state: {
+            totalTime,
+            totalQuestions: cuestionarioData.total_questions,
+            isAbandoned: true,
+            abandonedAtQuestion: currentQuestion + 1,
           },
         });
       }
@@ -341,13 +447,71 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center p-4">
+    <div className="min-h-screen bg-white flex flex-col items-center p-4 relative">
       {/* Badge modal */}
       <BadgeModal
         badge={currentBadge}
         isOpen={showBadgeModal}
         onClose={closeBadgeModal}
       />
+
+      {/* Abandon confirmation modal */}
+      <AnimatePresence>
+        {showAbandonConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowAbandonConfirm(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center mb-4">
+                <div className="text-5xl mb-3">😔</div>
+                <h3 className="text-xl font-bold text-gray-800">¿Deseas abandonar?</h3>
+                <p className="text-gray-600 mt-2">
+                  Has respondido {answers.length} de {cuestionarioData.total_questions} preguntas.
+                  Tus respuestas se guardarán.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => setShowAbandonConfirm(false)}
+                  variant="secondary"
+                  fullWidth
+                >
+                  Continuar
+                </Button>
+                <Button
+                  onClick={handleAbandon}
+                  variant="primary"
+                  fullWidth
+                  className="!bg-red-500 hover:!bg-red-600"
+                >
+                  Abandonar
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Abandon button */}
+      <button
+        onClick={() => setShowAbandonConfirm(true)}
+        className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-red-50"
+        aria-label="Abandonar cuestionario"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
 
       <div className="w-full max-w-lg">
         {/* Title */}

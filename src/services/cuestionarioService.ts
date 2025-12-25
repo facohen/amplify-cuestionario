@@ -47,6 +47,30 @@ export interface StoredResponseData {
   respondentName: string | null;
   respondentEmail: string | null;
   respondentCuil: string | null;
+  // Datos del administrador
+  administeredBy: string | null;
+  administeredByEmail: string | null;
+  // Feedback del respondente
+  feedbackEaseOfUse: number | null;
+  feedbackSurveyLength: number | null;
+  feedbackWillingToReceive: boolean | null;
+  feedbackSubmittedAt: string | null;
+  // Datos de abandono
+  abandonedAtQuestion: number | null;
+  abandonReason: string | null;
+}
+
+export interface FeedbackData {
+  easeOfUse: number;
+  surveyLength: number;
+  willingToReceive: boolean;
+}
+
+export interface AbandonFeedbackData {
+  abandonReason: string;
+  easeOfUse?: number;
+  surveyLength?: number;
+  willingToReceive?: boolean;
 }
 
 export interface RespondentInfo {
@@ -236,11 +260,17 @@ function enrichAnswers(answers: AnswerMetrics[], cuestionario: Cuestionario): En
   });
 }
 
+export interface AdministratorInfo {
+  email: string;
+  name?: string;
+}
+
 export async function submitResponse(
   response: CuestionarioResponse,
   tokenId: string,
   cuestionario: Cuestionario,
-  respondent?: RespondentInfo | null
+  respondent?: RespondentInfo | null,
+  administrator?: AdministratorInfo | null
 ): Promise<string> {
   console.log('submitResponse called:', { tokenId, cuestionarioId: cuestionario.id_cuestionario });
 
@@ -269,6 +299,9 @@ export async function submitResponse(
     respondentName: respondent?.name || null,
     respondentEmail: respondent?.email || null,
     respondentCuil: respondent?.cuil || null,
+    // Datos del administrador
+    administeredBy: administrator?.name || null,
+    administeredByEmail: administrator?.email || null,
   };
 
   console.log('Creating CuestionarioResponse with payload:', {
@@ -335,6 +368,14 @@ export async function listResponses(cuestionarioId?: string): Promise<StoredResp
       respondentName: item.respondentName || null,
       respondentEmail: item.respondentEmail || null,
       respondentCuil: item.respondentCuil || null,
+      administeredBy: item.administeredBy || null,
+      administeredByEmail: item.administeredByEmail || null,
+      feedbackEaseOfUse: item.feedbackEaseOfUse || null,
+      feedbackSurveyLength: item.feedbackSurveyLength || null,
+      feedbackWillingToReceive: item.feedbackWillingToReceive ?? null,
+      feedbackSubmittedAt: item.feedbackSubmittedAt || null,
+      abandonedAtQuestion: item.abandonedAtQuestion || null,
+      abandonReason: item.abandonReason || null,
     }));
   } catch (error) {
     console.error('Exception in listResponses:', error);
@@ -372,6 +413,14 @@ export async function getResponse(id: string): Promise<StoredResponseData | null
     respondentName: item.respondentName || null,
     respondentEmail: item.respondentEmail || null,
     respondentCuil: item.respondentCuil || null,
+    administeredBy: item.administeredBy || null,
+    administeredByEmail: item.administeredByEmail || null,
+    feedbackEaseOfUse: item.feedbackEaseOfUse || null,
+    feedbackSurveyLength: item.feedbackSurveyLength || null,
+    feedbackWillingToReceive: item.feedbackWillingToReceive ?? null,
+    feedbackSubmittedAt: item.feedbackSubmittedAt || null,
+    abandonedAtQuestion: item.abandonedAtQuestion || null,
+    abandonReason: item.abandonReason || null,
   };
 }
 
@@ -494,5 +543,118 @@ export async function listPendingResponses(): Promise<StoredResponseData[]> {
     respondentName: item.respondentName || null,
     respondentEmail: item.respondentEmail || null,
     respondentCuil: item.respondentCuil || null,
+    administeredBy: item.administeredBy || null,
+    administeredByEmail: item.administeredByEmail || null,
+    feedbackEaseOfUse: item.feedbackEaseOfUse || null,
+    feedbackSurveyLength: item.feedbackSurveyLength || null,
+    feedbackWillingToReceive: item.feedbackWillingToReceive ?? null,
+    feedbackSubmittedAt: item.feedbackSubmittedAt || null,
+    abandonedAtQuestion: item.abandonedAtQuestion || null,
+    abandonReason: item.abandonReason || null,
   }));
+}
+
+// Listar respuestas administradas por un usuario específico
+export async function listResponsesByAdministrator(adminEmail: string): Promise<StoredResponseData[]> {
+  try {
+    // Listar todas las respuestas y filtrar por email del administrador
+    // TODO: Usar índice secundario cuando el schema esté desplegado
+    const result = await authClient.models.CuestionarioResponse.list();
+
+    if (result.errors) {
+      console.error('Error listing responses by administrator:', result.errors);
+      return [];
+    }
+
+    // Filtrar por administeredByEmail
+    const filtered = (result.data || []).filter(
+      (item) => item.administeredByEmail === adminEmail
+    );
+
+    return filtered.map((item) => ({
+      id: item.id,
+      tokenId: item.tokenId,
+      cuestionarioId: item.cuestionarioId,
+      cuestionarioVersion: item.cuestionarioVersion,
+      cuestionarioTitle: item.cuestionarioTitle || null,
+      startedAt: item.startedAt,
+      finishedAt: item.finishedAt || null,
+      totalTimeMs: item.totalTimeMs || null,
+      totalTimeAdjustedMs: item.totalTimeAdjustedMs || null,
+      answersJson: parseAnswersJson(item.answersJson),
+      status: (item.status as 'in_progress' | 'completed' | 'abandoned') || 'completed',
+      downloadStatus: (item.downloadStatus as 'pending' | 'downloaded') || 'pending',
+      downloadedAt: item.downloadedAt || null,
+      downloadedBy: item.downloadedBy || null,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      respondentName: item.respondentName || null,
+      respondentEmail: item.respondentEmail || null,
+      respondentCuil: item.respondentCuil || null,
+      administeredBy: item.administeredBy || null,
+      administeredByEmail: item.administeredByEmail || null,
+      feedbackEaseOfUse: item.feedbackEaseOfUse || null,
+      feedbackSurveyLength: item.feedbackSurveyLength || null,
+      feedbackWillingToReceive: item.feedbackWillingToReceive ?? null,
+      feedbackSubmittedAt: item.feedbackSubmittedAt || null,
+      abandonedAtQuestion: item.abandonedAtQuestion || null,
+      abandonReason: item.abandonReason || null,
+    }));
+  } catch (error) {
+    console.error('Exception in listResponsesByAdministrator:', error);
+    return [];
+  }
+}
+
+// Guardar feedback del respondente
+export async function submitFeedback(responseId: string, feedback: FeedbackData): Promise<void> {
+  try {
+    const result = await client.models.CuestionarioResponse.update({
+      id: responseId,
+      feedbackEaseOfUse: feedback.easeOfUse,
+      feedbackSurveyLength: feedback.surveyLength,
+      feedbackWillingToReceive: feedback.willingToReceive,
+      feedbackSubmittedAt: new Date().toISOString(),
+    });
+
+    if (result.errors) {
+      console.error('GraphQL errors submitting feedback:', result.errors);
+      throw new Error(result.errors.map(e => e.message).join(', '));
+    }
+
+    console.log('Feedback submitted successfully:', responseId);
+  } catch (error) {
+    console.error('Exception submitting feedback:', error);
+    throw error;
+  }
+}
+
+// Guardar abandono con feedback opcional
+export async function submitAbandonWithFeedback(
+  responseId: string,
+  abandonedAtQuestion: number,
+  feedback: AbandonFeedbackData
+): Promise<void> {
+  try {
+    const result = await client.models.CuestionarioResponse.update({
+      id: responseId,
+      status: 'abandoned',
+      abandonedAtQuestion,
+      abandonReason: feedback.abandonReason,
+      feedbackEaseOfUse: feedback.easeOfUse || null,
+      feedbackSurveyLength: feedback.surveyLength || null,
+      feedbackWillingToReceive: feedback.willingToReceive ?? null,
+      feedbackSubmittedAt: new Date().toISOString(),
+    });
+
+    if (result.errors) {
+      console.error('GraphQL errors submitting abandon feedback:', result.errors);
+      throw new Error(result.errors.map(e => e.message).join(', '));
+    }
+
+    console.log('Abandon feedback submitted successfully:', responseId);
+  } catch (error) {
+    console.error('Exception submitting abandon feedback:', error);
+    throw error;
+  }
 }

@@ -1,0 +1,35 @@
+{
+  "name": "Amplify Cuestionario Palette",
+  "description": "Colores extraídos del proyecto, formato compatible con plugins de tokens de Figma.",
+  "tokens": {
+    "color": {
+      "primary-purple": { "value": "#d946ef", "type": "color" },
+      "primary-purple-dark": { "value": "#a21caf", "type": "color" },
+      "primary-purple-light": { "value": "#e879f9", "type": "color" },
+
+      "accent-orange": { "value": "#f97316", "type": "color" },
+      "accent-orange-light": { "value": "#fb923c", "type": "color" },
+      "accent-orange-dark": { "value": "#ea580c", "type": "color" },
+
+      "green-1": { "value": "#22c55e", "type": "color" },
+      "green-2": { "value": "#16a34a", "type": "color" },
+
+      "yellow-1": { "value": "#eab308", "type": "color" },
+      "yellow-2": { "value": "#fef3c7", "type": "color" },
+      "yellow-3": { "value": "#ca8a04", "type": "color" },
+
+      "orange-2": { "value": "#fbbf24", "type": "color" },
+
+      "purple-1": { "value": "#a855f7", "type": "color" },
+      "purple-2": { "value": "#c084fc", "type": "color" },
+      "purple-3": { "value": "#d8b4fe", "type": "color" },
+
+      "blue-1": { "value": "#3b82f6", "type": "color" },
+      "pink-1": { "value": "#ec4899", "type": "color" },
+
+      "white": { "value": "#ffffff", "type": "color" },
+
+      "rgba-white-40": { "value": "rgba(255, 255, 255, 0.4)", "type": "color" }
+    }
+  }
+}

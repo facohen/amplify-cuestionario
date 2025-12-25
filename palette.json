@@ -1,0 +1,42 @@
+{
+  "variables": {
+    "--color-primary-purple": "#d946ef",
+    "--color-primary-purple-dark": "#a21caf",
+    "--color-primary-purple-light": "#e879f9",
+    "--color-accent-orange": "#f97316",
+    "--color-accent-orange-light": "#fb923c",
+    "--color-accent-orange-dark": "#ea580c"
+  },
+  "components": {
+    "green-1": "#22c55e",
+    "green-2": "#16a34a",
+    "yellow-1": "#eab308",
+    "yellow-2": "#fef3c7",
+    "yellow-3": "#ca8a04",
+    "orange-1": "#f97316",
+    "orange-2": "#fbbf24",
+    "purple-1": "#a855f7",
+    "purple-2": "#c084fc",
+    "purple-3": "#d8b4fe",
+    "blue-1": "#3b82f6",
+    "pink-1": "#ec4899",
+    "white": "#ffffff"
+  },
+  "usages": {
+    "#d946ef": ["src/index.css", "src/components/gamification/ConfettiCelebration.tsx"],
+    "#f97316": ["src/index.css", "src/components/gamification/ConfettiCelebration.tsx", "src/components/gamification/BadgeIcon.tsx"],
+    "#22c55e": ["src/components/gamification/BadgeIcon.tsx", "src/components/gamification/ConfettiCelebration.tsx"],
+    "#eab308": ["src/components/gamification/BadgeIcon.tsx", "src/components/gamification/ConfettiCelebration.tsx"],
+    "#3b82f6": ["src/components/gamification/ConfettiCelebration.tsx"],
+    "#ec4899": ["src/components/gamification/ConfettiCelebration.tsx"],
+    "#a855f7": ["src/components/gamification/BadgeIcon.tsx"],
+    "#c084fc": ["src/components/gamification/BadgeIcon.tsx"],
+    "#d8b4fe": ["src/components/gamification/BadgeIcon.tsx"],
+    "#22c55e": ["src/components/gamification/BadgeIcon.tsx"],
+    "#16a34a": ["src/components/gamification/BadgeIcon.tsx"],
+    "#ca8a04": ["src/components/gamification/BadgeIcon.tsx"],
+    "#fbbf24": ["src/components/gamification/BadgeIcon.tsx"],
+    "#fef3c7": ["src/components/gamification/BadgeIcon.tsx"],
+    "rgba(255,255,255,0.4)": ["src/index.css"]
+  }
+}

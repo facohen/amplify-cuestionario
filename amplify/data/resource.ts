@@ -16,7 +16,7 @@ const schema = a.schema({
       createdBy: a.string(),
     })
     .authorization((allow) => [
-      allow.publicApiKey().to(['read', 'update']),
+      allow.publicApiKey().to(['create', 'read', 'update']),
       allow.authenticated().to(['create', 'read', 'update', 'delete']),
     ]),
 
@@ -66,14 +66,29 @@ const schema = a.schema({
       respondentName: a.string(),
       respondentEmail: a.string(),
       respondentCuil: a.string(),
+
+      // Datos del administrador (quien aplico la encuesta)
+      administeredBy: a.string(),
+      administeredByEmail: a.string(),
+
+      // Feedback del respondente (al devolver tablet)
+      feedbackEaseOfUse: a.integer(),
+      feedbackSurveyLength: a.integer(),
+      feedbackWillingToReceive: a.boolean(),
+      feedbackSubmittedAt: a.datetime(),
+
+      // Datos de abandono
+      abandonedAtQuestion: a.integer(),
+      abandonReason: a.string(),
     })
     .authorization((allow) => [
-      allow.publicApiKey().to(['create']),
+      allow.publicApiKey().to(['create', 'update']),
       allow.authenticated().to(['create', 'read', 'update', 'delete']),
     ])
     .secondaryIndexes((index) => [
       index('cuestionarioId'),
       index('downloadStatus'),
+      index('administeredByEmail'),
     ]),
 });
 

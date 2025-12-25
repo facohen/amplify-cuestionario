@@ -122,6 +122,32 @@ export async function createAssistedToken(
   return mapToken(token);
 }
 
+// Version publica que no requiere autenticacion de Cognito
+export async function createAssistedTokenPublic(
+  cuestionarioId: string,
+  respondent: RespondentData,
+  createdBy: string
+): Promise<Token> {
+  const { data: token, errors } = await withGraphQLRetry(() =>
+    publicClient.models.Token.create({
+      cuestionarioId,
+      status: 'active',
+      respondentName: respondent.name,
+      respondentEmail: respondent.email,
+      respondentCuil: respondent.cuil,
+      isAssistedEntry: true,
+      createdBy,
+    })
+  );
+
+  if (errors || !token) {
+    console.error('Create assisted token (public) errors:', errors);
+    throw new Error('Failed to create assisted token');
+  }
+
+  return mapToken(token);
+}
+
 export async function getTokenById(tokenId: string): Promise<Token | null> {
   const { data: token, errors } = await withGraphQLRetry(() =>
     publicClient.models.Token.get({ id: tokenId })
