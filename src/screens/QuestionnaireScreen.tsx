@@ -550,7 +550,7 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center p-4 relative">
+    <div className="min-h-screen bg-white flex flex-col items-center px-3 sm:px-4 py-3 sm:py-4 relative">
       {/* Badge modal */}
       <BadgeModal
         badge={currentBadge}
@@ -565,25 +565,25 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4"
             onClick={() => setShowAbandonConfirm(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl"
+              className="bg-white rounded-2xl p-4 sm:p-6 max-w-sm w-full shadow-xl mx-3"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="text-center mb-4">
-                <div className="text-5xl mb-3">😔</div>
-                <h3 className="text-xl font-bold text-gray-800">¿Deseas abandonar?</h3>
-                <p className="text-gray-600 mt-2">
+                <div className="text-4xl sm:text-5xl mb-2 sm:mb-3">😔</div>
+                <h3 className="text-lg sm:text-xl font-bold text-gray-800">¿Deseas abandonar?</h3>
+                <p className="text-sm sm:text-base text-gray-600 mt-2">
                   Has respondido {answers.length} de {cuestionarioData.total_questions} preguntas.
                   Tus respuestas se guardarán.
                 </p>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-2 sm:gap-3">
                 <Button
                   onClick={() => setShowAbandonConfirm(false)}
                   variant="secondary"
@@ -608,10 +608,10 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
       {/* Abandon button */}
       <button
         onClick={() => setShowAbandonConfirm(true)}
-        className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-red-50"
+        className="absolute top-2 sm:top-4 right-2 sm:right-4 p-2 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-red-50"
         aria-label="Abandonar cuestionario"
       >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
@@ -619,7 +619,7 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
       <div className="w-full max-w-lg">
         {/* Title */}
         <motion.h1
-          className="text-2xl font-bold bg-gradient-to-r from-fuchsia-600 to-orange-500 bg-clip-text text-transparent text-center mb-2 mt-4"
+          className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-fuchsia-600 to-orange-500 bg-clip-text text-transparent text-center mb-2 mt-2 sm:mt-4 pr-8"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
         >
@@ -628,7 +628,7 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
 
         {/* Subtitle */}
         <motion.p
-          className="text-sm text-gray-600 text-center mb-4"
+          className="text-xs sm:text-sm text-gray-600 text-center mb-3 sm:mb-4 px-2"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.1 }}
@@ -638,7 +638,7 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
 
         {/* Progress section */}
         <motion.div
-          className="mb-4"
+          className="mb-3 sm:mb-4"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
         >
@@ -649,15 +649,15 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
 
           {/* Earned badges display */}
           {currentEarnedBadges.length > 0 && (
-            <div className="flex items-center gap-2 mt-3 p-2 bg-gradient-to-r from-fuchsia-50 to-orange-50 rounded-lg border border-fuchsia-200">
-              <span className="text-xs font-semibold text-fuchsia-600">Insignias Logradas:</span>
+            <div className="flex items-center gap-2 mt-2 sm:mt-3 p-2 bg-gradient-to-r from-fuchsia-50 to-orange-50 rounded-lg border border-fuchsia-200">
+              <span className="text-[10px] sm:text-xs font-semibold text-fuchsia-600">Insignias:</span>
               <div className="flex gap-1">
                 {currentEarnedBadges.map((badge) => (
                   <BadgeIcon
                     key={badge.id}
                     icon={badge.icon}
                     size="sm"
-                    className="w-6 h-6"
+                    className="w-5 h-5 sm:w-6 sm:h-6"
                   />
                 ))}
               </div>
@@ -674,24 +674,24 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
           >
-            <Card className="mb-4 border-2 border-fuchsia-400">
-              <h2 className="text-lg font-bold text-fuchsia-600 mb-6">
+            <Card className="mb-3 sm:mb-4 border-2 border-fuchsia-400">
+              <h2 className="text-base sm:text-lg font-bold text-fuchsia-600 mb-4 sm:mb-6">
                 {question.text}
               </h2>
 
-              <div className="space-y-3">
+              <div className="space-y-2 sm:space-y-3">
                 {question.options.map((option) => (
                   <button
                     key={option.option_key}
                     onClick={() => handleOptionSelect(option.option_key)}
-                    className={`w-full p-4 text-left rounded-xl border-2 transition-all duration-200 ${
+                    className={`w-full p-3 sm:p-4 text-left rounded-xl border-2 transition-all duration-200 ${
                       selectedOption === option.option_key
                         ? 'border-fuchsia-500 bg-gradient-to-r from-fuchsia-500 to-orange-400 text-white shadow-lg scale-[1.02]'
                         : 'border-fuchsia-300 hover:border-fuchsia-400 hover:bg-fuchsia-50'
                     }`}
                   >
                     <span
-                      className={`font-bold ${
+                      className={`font-bold text-sm sm:text-base ${
                         selectedOption === option.option_key
                           ? 'text-white'
                           : 'text-fuchsia-600'
@@ -699,7 +699,7 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
                     >
                       {option.option_key}.
                     </span>{' '}
-                    <span className={selectedOption === option.option_key ? 'text-white' : 'text-gray-700'}>
+                    <span className={`text-sm sm:text-base ${selectedOption === option.option_key ? 'text-white' : 'text-gray-700'}`}>
                       {option.option_text}
                     </span>
                   </button>
@@ -710,7 +710,7 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
         </AnimatePresence>
 
         {/* Next/Submit button */}
-        <div>
+        <div className="pb-2">
           <Button
             onClick={handleNext}
             disabled={selectedOption === null}

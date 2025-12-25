@@ -55,14 +55,14 @@ export default function EncuestaGraciasScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4 relative">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center px-3 sm:px-4 py-4 relative">
       {/* Menu hamburguesa oculto */}
       <button
         onClick={() => setShowMenu(!showMenu)}
-        className="absolute top-4 right-4 p-2 text-white/30 hover:text-white/60 transition-colors"
+        className="absolute top-3 sm:top-4 right-3 sm:right-4 p-2 text-white/30 hover:text-white/60 transition-colors"
         aria-label="Menu"
       >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
         </svg>
       </button>
@@ -74,11 +74,11 @@ export default function EncuestaGraciasScreen() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute top-14 right-4 bg-white rounded-lg shadow-xl overflow-hidden z-50"
+            className="absolute top-12 sm:top-14 right-3 sm:right-4 bg-white rounded-lg shadow-xl overflow-hidden z-50"
           >
             <button
               onClick={() => navigate('/encuesta')}
-              className="w-full px-6 py-3 text-left text-gray-700 hover:bg-gray-100 transition-colors"
+              className="w-full px-4 sm:px-6 py-2.5 sm:py-3 text-left text-sm sm:text-base text-gray-700 hover:bg-gray-100 transition-colors"
             >
               Volver al panel
             </button>
@@ -114,18 +114,18 @@ export default function EncuestaGraciasScreen() {
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-                  className={`w-24 h-24 mx-auto mb-6 rounded-full flex items-center justify-center ${
+                  className={`w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-4 sm:mb-6 rounded-full flex items-center justify-center ${
                     isAbandoned
                       ? 'bg-gradient-to-br from-orange-400 to-red-500'
                       : 'bg-gradient-to-br from-green-400 to-emerald-600'
                   }`}
                 >
                   {isAbandoned ? (
-                    <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-10 h-10 sm:w-12 sm:h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   ) : (
-                    <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-10 h-10 sm:w-12 sm:h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                     </svg>
                   )}
@@ -135,7 +135,7 @@ export default function EncuestaGraciasScreen() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
-                  className="text-3xl font-bold text-gray-800 mb-4"
+                  className="text-2xl sm:text-3xl font-bold text-gray-800 mb-3 sm:mb-4"
                 >
                   {isAbandoned ? 'Entendemos' : '¡Gracias!'}
                 </motion.h1>
@@ -144,7 +144,7 @@ export default function EncuestaGraciasScreen() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
-                  className="text-gray-600 mb-6"
+                  className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6"
                 >
                   {isAbandoned ? (
                     state?.respondentName ? (
@@ -170,20 +170,20 @@ export default function EncuestaGraciasScreen() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.5 }}
-                    className="bg-gray-50 rounded-lg p-4 mb-6"
+                    className="bg-gray-50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6"
                   >
-                    <div className="grid grid-cols-2 gap-4 text-center">
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4 text-center">
                       <div>
-                        <p className="text-2xl font-bold text-purple-600">
+                        <p className="text-xl sm:text-2xl font-bold text-purple-600">
                           {isAbandoned ? state.abandonedAtQuestion : state.totalQuestions}
                         </p>
-                        <p className="text-sm text-gray-500">
-                          {isAbandoned ? 'preguntas respondidas' : 'preguntas'}
+                        <p className="text-xs sm:text-sm text-gray-500">
+                          {isAbandoned ? 'respondidas' : 'preguntas'}
                         </p>
                       </div>
                       <div>
-                        <p className="text-2xl font-bold text-purple-600">{formatTime(state.totalTime)}</p>
-                        <p className="text-sm text-gray-500">tiempo total</p>
+                        <p className="text-xl sm:text-2xl font-bold text-purple-600">{formatTime(state.totalTime)}</p>
+                        <p className="text-xs sm:text-sm text-gray-500">tiempo</p>
                       </div>
                     </div>
                   </motion.div>
@@ -202,7 +202,7 @@ export default function EncuestaGraciasScreen() {
                   >
                     {isAbandoned ? 'Continuar' : 'Cerrar encuesta'}
                   </Button>
-                  <p className="text-xs text-gray-400 mt-3">
+                  <p className="text-[10px] sm:text-xs text-gray-400 mt-2 sm:mt-3">
                     {isAbandoned
                       ? 'Nos ayudaría mucho conocer tu opinión.'
                       : 'Antes de finalizar, nos gustaría hacerte unas preguntas rápidas.'}

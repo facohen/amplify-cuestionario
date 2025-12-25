@@ -77,22 +77,22 @@ export default function FeedbackQuestions({ mode, onSubmit, isSubmitting = false
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
     >
-      <h2 className="text-xl font-bold text-gray-800 mb-6">
+      <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-4 sm:mb-6">
         {mode === 'abandon' ? 'Antes de irte...' : 'Cuéntanos tu experiencia'}
       </h2>
 
       {/* Motivo de abandono (solo en modo abandon) */}
       {mode === 'abandon' && (
-        <div className="mb-6">
-          <p className="text-sm font-medium text-gray-700 mb-3">
+        <div className="mb-4 sm:mb-6">
+          <p className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">
             ¿Por qué deseas abandonar el cuestionario?
           </p>
-          <div className="space-y-2">
+          <div className="space-y-1.5 sm:space-y-2">
             {ABANDON_REASONS.map((option) => (
               <button
                 key={option.value}
                 onClick={() => setAbandonReason(option.value)}
-                className={`w-full p-3 text-left rounded-xl border-2 transition-all ${
+                className={`w-full p-2.5 sm:p-3 text-left text-sm sm:text-base rounded-xl border-2 transition-all ${
                   abandonReason === option.value
                     ? 'border-purple-500 bg-purple-50 text-purple-700'
                     : 'border-gray-200 hover:border-gray-300'
@@ -106,70 +106,70 @@ export default function FeedbackQuestions({ mode, onSubmit, isSubmitting = false
       )}
 
       {/* Pregunta 1: Facilidad */}
-      <div className="mb-6">
-        <p className="text-sm font-medium text-gray-700 mb-3">
+      <div className="mb-4 sm:mb-6">
+        <p className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">
           ¿Qué tan fácil te resultó {mode === 'abandon' ? 'el cuestionario' : 'completarlo'}?
         </p>
-        <div className="flex justify-center gap-2">
+        <div className="flex justify-center gap-1.5 sm:gap-2">
           {EMOJI_OPTIONS.map((option) => (
             <button
               key={option.value}
               onClick={() => setEaseOfUse(option.value)}
-              className={`p-3 rounded-xl transition-all ${
+              className={`p-2 sm:p-3 rounded-xl transition-all ${
                 easeOfUse === option.value
                   ? 'bg-purple-100 scale-110 ring-2 ring-purple-500'
                   : 'bg-gray-50 hover:bg-gray-100'
               }`}
               title={option.label}
             >
-              <span className="text-2xl">{option.emoji}</span>
+              <span className="text-xl sm:text-2xl">{option.emoji}</span>
             </button>
           ))}
         </div>
         {easeOfUse && (
-          <p className="text-xs text-purple-600 mt-1">
+          <p className="text-[10px] sm:text-xs text-purple-600 mt-1 text-center">
             {EMOJI_OPTIONS.find(o => o.value === easeOfUse)?.label}
           </p>
         )}
       </div>
 
       {/* Pregunta 2: Extensión */}
-      <div className="mb-6">
-        <p className="text-sm font-medium text-gray-700 mb-3">
+      <div className="mb-4 sm:mb-6">
+        <p className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">
           ¿Te pareció que el cuestionario fue muy extenso?
         </p>
-        <div className="flex justify-center gap-2">
+        <div className="flex justify-center gap-1.5 sm:gap-2">
           {LENGTH_OPTIONS.map((option) => (
             <button
               key={option.value}
               onClick={() => setSurveyLength(option.value)}
-              className={`p-3 rounded-xl transition-all ${
+              className={`p-2 sm:p-3 rounded-xl transition-all ${
                 surveyLength === option.value
                   ? 'bg-purple-100 scale-110 ring-2 ring-purple-500'
                   : 'bg-gray-50 hover:bg-gray-100'
               }`}
               title={option.label}
             >
-              <span className="text-2xl">{option.emoji}</span>
+              <span className="text-xl sm:text-2xl">{option.emoji}</span>
             </button>
           ))}
         </div>
         {surveyLength && (
-          <p className="text-xs text-purple-600 mt-1">
+          <p className="text-[10px] sm:text-xs text-purple-600 mt-1 text-center">
             {LENGTH_OPTIONS.find(o => o.value === surveyLength)?.label}
           </p>
         )}
       </div>
 
       {/* Pregunta 3: Propuestas */}
-      <div className="mb-6">
-        <p className="text-sm font-medium text-gray-700 mb-3">
+      <div className="mb-4 sm:mb-6">
+        <p className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">
           ¿Estarías dispuesto/a a recibir propuestas personalizadas?
         </p>
-        <div className="flex justify-center gap-4">
+        <div className="flex justify-center gap-3 sm:gap-4">
           <button
             onClick={() => setWillingToReceive(true)}
-            className={`px-8 py-3 rounded-xl font-medium transition-all ${
+            className={`px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base font-medium transition-all ${
               willingToReceive === true
                 ? 'bg-green-500 text-white scale-105'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -179,7 +179,7 @@ export default function FeedbackQuestions({ mode, onSubmit, isSubmitting = false
           </button>
           <button
             onClick={() => setWillingToReceive(false)}
-            className={`px-8 py-3 rounded-xl font-medium transition-all ${
+            className={`px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base font-medium transition-all ${
               willingToReceive === false
                 ? 'bg-red-500 text-white scale-105'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -201,7 +201,7 @@ export default function FeedbackQuestions({ mode, onSubmit, isSubmitting = false
       </Button>
 
       {mode === 'abandon' && (
-        <p className="text-xs text-gray-400 mt-3 text-center">
+        <p className="text-[10px] sm:text-xs text-gray-400 mt-2 sm:mt-3 text-center">
           Las preguntas de feedback son opcionales
         </p>
       )}

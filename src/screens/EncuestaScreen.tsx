@@ -32,6 +32,13 @@ interface KPIStats {
   completionRate: number;
 }
 
+interface DailyGoalStats {
+  completedToday: number;
+  dailyGoal: number;
+  progressPercent: number;
+  isGoalMet: boolean;
+}
+
 function EncuestaPanel({ signOut }: { signOut?: () => void }) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('nueva');
@@ -55,6 +62,9 @@ function EncuestaPanel({ signOut }: { signOut?: () => void }) {
   const [historial, setHistorial] = useState<StoredResponseData[]>([]);
   const [isLoadingHistorial, setIsLoadingHistorial] = useState(false);
 
+  // Meta diaria de encuestas completadas
+  const DAILY_GOAL = 5;
+
   // Calcular KPIs
   const kpiStats = useMemo<KPIStats>(() => {
     const sevenDaysAgo = new Date();
@@ -75,6 +85,27 @@ function EncuestaPanel({ signOut }: { signOut?: () => void }) {
       abandoned,
       inProgress,
       completionRate: total > 0 ? Math.round((completed / total) * 100) : 0,
+    };
+  }, [historial]);
+
+  // Calcular progreso diario
+  const dailyGoalStats = useMemo<DailyGoalStats>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const completedToday = historial.filter((item) => {
+      const itemDate = new Date(item.createdAt);
+      itemDate.setHours(0, 0, 0, 0);
+      return itemDate.getTime() === today.getTime() && item.status === 'completed';
+    }).length;
+
+    const progressPercent = Math.min((completedToday / DAILY_GOAL) * 100, 100);
+
+    return {
+      completedToday,
+      dailyGoal: DAILY_GOAL,
+      progressPercent,
+      isGoalMet: completedToday >= DAILY_GOAL,
     };
   }, [historial]);
 
@@ -267,81 +298,81 @@ function EncuestaPanel({ signOut }: { signOut?: () => void }) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
         <header className="bg-white/10 backdrop-blur-md border-b border-white/20">
-          <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4 flex justify-between items-center">
             <button
               onClick={() => setSelectedSurvey(null)}
-              className="flex items-center gap-2 text-white hover:text-purple-200 transition-colors"
+              className="flex items-center gap-1 sm:gap-2 text-white hover:text-purple-200 transition-colors"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              Volver
+              <span className="text-sm sm:text-base">Volver</span>
             </button>
-            <span className="text-sm text-purple-200">Detalle de Encuesta</span>
+            <span className="text-xs sm:text-sm text-purple-200">Detalle</span>
           </div>
         </header>
 
-        <main className="max-w-4xl mx-auto px-4 py-8">
+        <main className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <Card className="bg-white/95 backdrop-blur mb-6">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-800">
+            <Card className="bg-white/95 backdrop-blur mb-4 sm:mb-6">
+              <div className="flex justify-between items-start mb-4 sm:mb-6 gap-2">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-800 truncate">
                     {selectedSurvey.respondentName || 'Sin nombre'}
                   </h2>
-                  <p className="text-gray-500 font-mono">{selectedSurvey.respondentCuil || '-'}</p>
+                  <p className="text-gray-500 font-mono text-sm truncate">{selectedSurvey.respondentCuil || '-'}</p>
                 </div>
                 {getStatusBadge(selectedSurvey.status)}
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-gray-50 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-purple-600">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
+                <div className="bg-gray-50 rounded-lg p-2 sm:p-3 text-center">
+                  <p className="text-xl sm:text-2xl font-bold text-purple-600">
                     {selectedSurvey.answersJson?.length || 0}
                   </p>
-                  <p className="text-xs text-gray-500">Respuestas</p>
+                  <p className="text-[10px] sm:text-xs text-gray-500">Respuestas</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-purple-600">
+                <div className="bg-gray-50 rounded-lg p-2 sm:p-3 text-center">
+                  <p className="text-xl sm:text-2xl font-bold text-purple-600">
                     {selectedSurvey.totalTimeMs ? formatTime(selectedSurvey.totalTimeMs) : '-'}
                   </p>
-                  <p className="text-xs text-gray-500">Tiempo</p>
+                  <p className="text-[10px] sm:text-xs text-gray-500">Tiempo</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3 text-center">
-                  <p className="text-sm font-medium text-gray-800">
+                <div className="bg-gray-50 rounded-lg p-2 sm:p-3 text-center">
+                  <p className="text-xs sm:text-sm font-medium text-gray-800">
                     {formatDate(selectedSurvey.startedAt)}
                   </p>
-                  <p className="text-xs text-gray-500">Inicio</p>
+                  <p className="text-[10px] sm:text-xs text-gray-500">Inicio</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3 text-center">
-                  <p className="text-sm font-medium text-gray-800">
+                <div className="bg-gray-50 rounded-lg p-2 sm:p-3 text-center">
+                  <p className="text-xs sm:text-sm font-medium text-gray-800">
                     {selectedSurvey.finishedAt ? formatDate(selectedSurvey.finishedAt) : '-'}
                   </p>
-                  <p className="text-xs text-gray-500">Fin</p>
+                  <p className="text-[10px] sm:text-xs text-gray-500">Fin</p>
                 </div>
               </div>
 
               {selectedSurvey.respondentEmail && (
-                <p className="text-sm text-gray-600 mb-4">
+                <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4 truncate">
                   <span className="font-medium">Email:</span> {selectedSurvey.respondentEmail}
                 </p>
               )}
 
               {/* Info de abandono */}
               {selectedSurvey.status === 'abandoned' && selectedSurvey.abandonedAtQuestion && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                  <h4 className="font-medium text-red-800 mb-2">Informacion de Abandono</h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mb-3 sm:mb-4">
+                  <h4 className="font-medium text-red-800 mb-2 text-sm sm:text-base">Informacion de Abandono</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 text-xs sm:text-sm">
                     <div>
-                      <span className="text-red-600">Abandono en pregunta:</span>
-                      <span className="ml-2 font-medium text-red-800">{selectedSurvey.abandonedAtQuestion}</span>
+                      <span className="text-red-600">Pregunta:</span>
+                      <span className="ml-1 sm:ml-2 font-medium text-red-800">{selectedSurvey.abandonedAtQuestion}</span>
                     </div>
                     <div>
                       <span className="text-red-600">Motivo:</span>
-                      <span className="ml-2 font-medium text-red-800">
+                      <span className="ml-1 sm:ml-2 font-medium text-red-800">
                         {getAbandonReasonLabel(selectedSurvey.abandonReason)}
                       </span>
                     </div>
@@ -351,24 +382,24 @@ function EncuestaPanel({ signOut }: { signOut?: () => void }) {
 
               {/* Feedback del usuario */}
               {selectedSurvey.feedbackSubmittedAt && (
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                  <h4 className="font-medium text-purple-800 mb-2">Feedback del Encuestado</h4>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 sm:p-4">
+                  <h4 className="font-medium text-purple-800 mb-2 text-sm sm:text-base">Feedback</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm">
                     <div>
                       <span className="text-purple-600">Facilidad:</span>
-                      <span className="ml-2 font-medium text-purple-800">
+                      <span className="ml-1 sm:ml-2 font-medium text-purple-800">
                         {getFeedbackLabel(selectedSurvey.feedbackEaseOfUse, 'ease')}
                       </span>
                     </div>
                     <div>
                       <span className="text-purple-600">Extension:</span>
-                      <span className="ml-2 font-medium text-purple-800">
+                      <span className="ml-1 sm:ml-2 font-medium text-purple-800">
                         {getFeedbackLabel(selectedSurvey.feedbackSurveyLength, 'length')}
                       </span>
                     </div>
                     <div>
-                      <span className="text-purple-600">Acepta propuestas:</span>
-                      <span className="ml-2 font-medium text-purple-800">
+                      <span className="text-purple-600">Propuestas:</span>
+                      <span className="ml-1 sm:ml-2 font-medium text-purple-800">
                         {selectedSurvey.feedbackWillingToReceive === null
                           ? '-'
                           : selectedSurvey.feedbackWillingToReceive
@@ -383,14 +414,14 @@ function EncuestaPanel({ signOut }: { signOut?: () => void }) {
 
             {selectedSurvey.answersJson && selectedSurvey.answersJson.length > 0 && (
               <Card className="bg-white/95 backdrop-blur">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Respuestas</h3>
-                <div className="space-y-3 max-h-96 overflow-y-auto">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Respuestas</h3>
+                <div className="space-y-3 max-h-[50vh] sm:max-h-96 overflow-y-auto">
                   {selectedSurvey.answersJson.map((answer, index) => (
                     <div key={index} className="border-b border-gray-100 pb-3 last:border-0">
-                      <p className="text-sm text-gray-500 mb-1">Pregunta {answer.question_number}</p>
-                      <p className="text-gray-800">{answer.question_text}</p>
-                      <p className="text-purple-600 font-medium mt-1">{answer.selected_option_text}</p>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="text-xs sm:text-sm text-gray-500 mb-1">Pregunta {answer.question_number}</p>
+                      <p className="text-sm sm:text-base text-gray-800">{answer.question_text}</p>
+                      <p className="text-sm sm:text-base text-purple-600 font-medium mt-1">{answer.selected_option_text}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-400 mt-1">
                         Tiempo: {formatTime(answer.time_to_answer_ms)}
                         {answer.changed_answer && ` · Cambios: ${answer.change_count}`}
                       </p>
@@ -409,88 +440,150 @@ function EncuestaPanel({ signOut }: { signOut?: () => void }) {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       {/* Header */}
       <header className="bg-white/10 backdrop-blur-md border-b border-white/20">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-xl font-bold text-white">Sistema de Administracion</h1>
-            <p className="text-sm text-purple-200">Tests Psicometricos</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-purple-200">
-              {adminInfo?.name || adminInfo?.email}
-            </span>
-            <button
-              onClick={signOut}
-              className="px-4 py-2 text-sm bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
-            >
-              Cerrar sesion
-            </button>
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
+          <div className="flex justify-between items-center">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-base sm:text-xl font-bold text-white truncate">Sistema de Administracion</h1>
+              <p className="text-xs sm:text-sm text-purple-200">Tests Psicometricos</p>
+            </div>
+            <div className="flex items-center gap-2 sm:gap-4 ml-2">
+              <span className="text-xs sm:text-sm text-purple-200 hidden sm:block truncate max-w-[150px]">
+                {adminInfo?.name || adminInfo?.email}
+              </span>
+              <button
+                onClick={signOut}
+                className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors whitespace-nowrap"
+              >
+                Salir
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 py-8">
+      <main className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+        {/* Meta Diaria */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 sm:mb-6"
+        >
+          <div className={`rounded-xl p-3 sm:p-4 ${
+            dailyGoalStats.isGoalMet
+              ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30'
+              : 'bg-white/10 backdrop-blur'
+          }`}>
+            <div className="flex justify-between items-center mb-2">
+              <div className="flex items-center gap-2">
+                {dailyGoalStats.isGoalMet ? (
+                  <span className="text-xl sm:text-2xl">🎉</span>
+                ) : (
+                  <span className="text-xl sm:text-2xl">🎯</span>
+                )}
+                <span className="text-white font-medium text-sm sm:text-base">Meta Diaria</span>
+              </div>
+              <span className={`text-base sm:text-lg font-bold ${
+                dailyGoalStats.isGoalMet ? 'text-green-400' : 'text-white'
+              }`}>
+                {dailyGoalStats.completedToday} / {dailyGoalStats.dailyGoal}
+              </span>
+            </div>
+
+            {/* Barra de progreso */}
+            <div className="relative h-3 sm:h-4 bg-white/10 rounded-full overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${dailyGoalStats.progressPercent}%` }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className={`absolute h-full rounded-full ${
+                  dailyGoalStats.isGoalMet
+                    ? 'bg-gradient-to-r from-green-400 to-emerald-500'
+                    : 'bg-gradient-to-r from-purple-400 to-pink-500'
+                }`}
+              />
+              {/* Marcadores de progreso */}
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="absolute top-0 bottom-0 w-px bg-white/20"
+                  style={{ left: `${(i / 5) * 100}%` }}
+                />
+              ))}
+            </div>
+
+            <p className={`text-xs mt-2 ${
+              dailyGoalStats.isGoalMet ? 'text-green-300' : 'text-purple-200'
+            }`}>
+              {dailyGoalStats.isGoalMet
+                ? '¡Felicitaciones! Has alcanzado tu meta diaria'
+                : `Faltan ${dailyGoalStats.dailyGoal - dailyGoalStats.completedToday} encuestas para tu meta`
+              }
+            </p>
+          </div>
+        </motion.div>
+
         {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-white/10 backdrop-blur rounded-xl p-4 text-center"
+            className="bg-white/10 backdrop-blur rounded-xl p-3 sm:p-4 text-center"
           >
-            <p className="text-3xl font-bold text-white">{kpiStats.total7Days}</p>
-            <p className="text-xs text-purple-200">Ultimos 7 dias</p>
+            <p className="text-2xl sm:text-3xl font-bold text-white">{kpiStats.total7Days}</p>
+            <p className="text-[10px] sm:text-xs text-purple-200">Ultimos 7 dias</p>
           </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-green-500/20 backdrop-blur rounded-xl p-4 text-center"
+            className="bg-green-500/20 backdrop-blur rounded-xl p-3 sm:p-4 text-center"
           >
-            <p className="text-3xl font-bold text-green-400">{kpiStats.completed}</p>
-            <p className="text-xs text-green-200">Completadas</p>
+            <p className="text-2xl sm:text-3xl font-bold text-green-400">{kpiStats.completed}</p>
+            <p className="text-[10px] sm:text-xs text-green-200">Completadas</p>
           </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="bg-red-500/20 backdrop-blur rounded-xl p-4 text-center"
+            className="bg-red-500/20 backdrop-blur rounded-xl p-3 sm:p-4 text-center"
           >
-            <p className="text-3xl font-bold text-red-400">{kpiStats.abandoned}</p>
-            <p className="text-xs text-red-200">Abandonadas</p>
+            <p className="text-2xl sm:text-3xl font-bold text-red-400">{kpiStats.abandoned}</p>
+            <p className="text-[10px] sm:text-xs text-red-200">Abandonadas</p>
           </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="bg-purple-500/20 backdrop-blur rounded-xl p-4 text-center"
+            className="bg-purple-500/20 backdrop-blur rounded-xl p-3 sm:p-4 text-center"
           >
-            <p className="text-3xl font-bold text-purple-300">{kpiStats.completionRate}%</p>
-            <p className="text-xs text-purple-200">Tasa exito</p>
+            <p className="text-2xl sm:text-3xl font-bold text-purple-300">{kpiStats.completionRate}%</p>
+            <p className="text-[10px] sm:text-xs text-purple-200">Tasa exito</p>
           </motion.div>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-4 sm:mb-6">
           <button
             onClick={() => setActiveTab('nueva')}
-            className={`px-6 py-3 rounded-lg font-medium transition-all ${
+            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg text-sm sm:text-base font-medium transition-all ${
               activeTab === 'nueva'
                 ? 'bg-white text-purple-900 shadow-lg'
                 : 'bg-white/10 text-white hover:bg-white/20'
             }`}
           >
-            Nueva Encuesta
+            Nueva
           </button>
           <button
             onClick={() => setActiveTab('historial')}
-            className={`px-6 py-3 rounded-lg font-medium transition-all ${
+            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg text-sm sm:text-base font-medium transition-all ${
               activeTab === 'historial'
                 ? 'bg-white text-purple-900 shadow-lg'
                 : 'bg-white/10 text-white hover:bg-white/20'
             }`}
           >
-            Mis Encuestas
+            Historial
           </button>
         </div>
 

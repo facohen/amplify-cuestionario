@@ -69,16 +69,31 @@ export default function RespuestasTab({
           finishedAt: data.finishedAt,
           totalTimeMs: data.totalTimeMs,
           totalTimeAdjustedMs: data.totalTimeAdjustedMs,
+          status: data.status,
           respondent: data.respondentName ? {
             name: data.respondentName,
             email: data.respondentEmail,
             cuil: data.respondentCuil,
+          } : null,
+          administrator: data.administeredBy ? {
+            name: data.administeredBy,
+            email: data.administeredByEmail,
           } : null,
           cuestionario: {
             id: data.cuestionarioId,
             version: data.cuestionarioVersion,
             title: data.cuestionarioTitle,
           },
+          abandon: data.status === 'abandoned' ? {
+            abandonedAtQuestion: data.abandonedAtQuestion,
+            reason: data.abandonReason,
+          } : null,
+          feedback: data.feedbackSubmittedAt ? {
+            easeOfUse: data.feedbackEaseOfUse,
+            surveyLength: data.feedbackSurveyLength,
+            willingToReceive: data.feedbackWillingToReceive,
+            submittedAt: data.feedbackSubmittedAt,
+          } : null,
           answers: data.answersJson,
         };
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -119,16 +134,31 @@ export default function RespuestasTab({
             finishedAt: data.finishedAt,
             totalTimeMs: data.totalTimeMs,
             totalTimeAdjustedMs: data.totalTimeAdjustedMs,
+            status: data.status,
             respondent: data.respondentName ? {
               name: data.respondentName,
               email: data.respondentEmail,
               cuil: data.respondentCuil,
+            } : null,
+            administrator: data.administeredBy ? {
+              name: data.administeredBy,
+              email: data.administeredByEmail,
             } : null,
             cuestionario: {
               id: data.cuestionarioId,
               version: data.cuestionarioVersion,
               title: data.cuestionarioTitle,
             },
+            abandon: data.status === 'abandoned' ? {
+              abandonedAtQuestion: data.abandonedAtQuestion,
+              reason: data.abandonReason,
+            } : null,
+            feedback: data.feedbackSubmittedAt ? {
+              easeOfUse: data.feedbackEaseOfUse,
+              surveyLength: data.feedbackSurveyLength,
+              willingToReceive: data.feedbackWillingToReceive,
+              submittedAt: data.feedbackSubmittedAt,
+            } : null,
             answers: data.answersJson,
           };
           downloadedData.push({
