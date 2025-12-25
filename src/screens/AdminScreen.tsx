@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Authenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
@@ -14,12 +14,10 @@ import {
 import CuestionariosTab from '../components/admin/CuestionariosTab';
 import TokensTab from '../components/admin/TokensTab';
 import RespuestasTab from '../components/admin/RespuestasTab';
-import CargaAsistidaTab from '../components/admin/CargaAsistidaTab';
 
-type AdminTab = 'tokens' | 'cuestionarios' | 'respuestas' | 'carga_asistida';
+type AdminTab = 'tokens' | 'cuestionarios' | 'respuestas';
 
 function AdminPanel() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<AdminTab>('cuestionarios');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -42,7 +40,7 @@ function AdminPanel() {
     const completed = searchParams.get('completed');
     if (completed === 'true') {
       setSuccessMessage('Cuestionario completado exitosamente');
-      setActiveTab('carga_asistida');
+      setActiveTab('respuestas');
       // Limpiar el parámetro de la URL
       setSearchParams({});
       // Ocultar mensaje después de 5 segundos
@@ -100,10 +98,6 @@ function AdminPanel() {
     }
   }
 
-  function handleStartAssistedQuestionnaire(tokenId: string) {
-    navigate(`/asistida/${tokenId}`);
-  }
-
   return (
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-6xl mx-auto">
@@ -135,16 +129,6 @@ function AdminPanel() {
         {/* Tabs */}
         <div className="flex gap-2 mb-6 flex-wrap">
           <button
-            onClick={() => setActiveTab('carga_asistida')}
-            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-              activeTab === 'carga_asistida'
-                ? 'bg-fuchsia-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            Carga Asistida
-          </button>
-          <button
             onClick={() => setActiveTab('cuestionarios')}
             className={`px-6 py-3 rounded-lg font-medium transition-colors ${
               activeTab === 'cuestionarios'
@@ -175,13 +159,6 @@ function AdminPanel() {
             Respuestas
           </button>
         </div>
-
-        {activeTab === 'carga_asistida' && (
-          <CargaAsistidaTab
-            cuestionarios={cuestionarios}
-            onStartQuestionnaire={handleStartAssistedQuestionnaire}
-          />
-        )}
 
         {activeTab === 'cuestionarios' && (
           <CuestionariosTab

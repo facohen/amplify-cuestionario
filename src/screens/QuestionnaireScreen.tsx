@@ -15,7 +15,7 @@ import BadgeModal from '../components/gamification/BadgeModal';
 import BadgeIcon from '../components/gamification/BadgeIcon';
 import { getEarnedBadges } from '../data/badges';
 
-type ScreenState = 'loading' | 'welcome' | 'questionnaire' | 'submitting';
+type ScreenState = 'loading' | 'welcome' | 'terms' | 'questionnaire' | 'submitting';
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -63,6 +63,7 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
   const questionStartTime = useRef<number>(Date.now());
   const changeCount = useRef<number>(0);
   const firstSelection = useRef<string | null>(null);
+  const cuestionarioLoaded = useRef<boolean>(false);
 
   const question = cuestionarioData?.questions[currentQuestion];
   const isLastQuestion = cuestionarioData ? currentQuestion === cuestionarioData.questions.length - 1 : false;
@@ -112,8 +113,12 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
   // Handle token validation result and load the ACTIVE cuestionario
   useEffect(() => {
     async function loadCuestionario() {
+      // Evitar cargar múltiples veces
+      if (cuestionarioLoaded.current) return;
+
       // En modo asistido, el token acaba de ser creado, no necesitamos validarlo
       if (assistedMode && tokenId) {
+        cuestionarioLoaded.current = true;
         try {
           // Cargar datos del token para obtener info del respondente
           const tokenData = await getTokenById(tokenId);
@@ -129,21 +134,21 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
           const data = await getActiveCuestionario();
           if (data) {
             setCuestionarioData(data);
-            // En modo asistido, saltar directamente al cuestionario
             setScreenState('welcome');
           } else {
             console.error('No active cuestionario found');
-            navigate('/admin?error=no_active');
+            navigate('/encuesta?error=no_active');
           }
         } catch (error) {
           console.error('Error loading cuestionario:', error);
-          navigate('/admin?error=load_error');
+          navigate('/encuesta?error=load_error');
         }
         return;
       }
 
       // Modo normal: validar token
       if (!tokenLoading && isValid && token) {
+        cuestionarioLoaded.current = true;
         try {
           // Always load the currently active cuestionario, not the one stored in token
           const data = await getActiveCuestionario();
@@ -182,7 +187,11 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
     firstSelection.current = null;
   }, [currentQuestion]);
 
-  function handleStart() {
+  function handleShowTerms() {
+    setScreenState('terms');
+  }
+
+  function handleAcceptTerms() {
     setStartedAt(new Date().toISOString());
     setScreenState('questionnaire');
   }
@@ -321,7 +330,8 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
       // Limpiar localStorage
       localStorage.removeItem('abandoned_questionnaire');
 
-      const responseId = await submitResponse(response, tokenId!, cuestionarioData, respondentData, administratorInfo);
+      const abandonQuestion = currentQuestion + 1;
+      const responseId = await submitResponse(response, tokenId!, cuestionarioData, respondentData, administratorInfo, abandonQuestion);
       await markAsUsed();
 
       // Navegar a pantalla de feedback con modo abandono
@@ -413,9 +423,102 @@ export default function QuestionnaireScreen({ assistedMode = false }: Questionna
               </ul>
             </div>
 
-            <Button onClick={handleStart} variant="primary" size="lg" fullWidth>
+            <Button onClick={handleShowTerms} variant="primary" size="lg" fullWidth>
               Comenzar Cuestionario
             </Button>
+          </motion.div>
+        </Card>
+      </div>
+    );
+  }
+
+  // Terms state
+  if (screenState === 'terms') {
+    return (
+      <div className="min-h-screen bg-gradient-questionnaire flex items-center justify-center p-4">
+        <Card className="max-w-2xl w-full">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <h1 className="text-2xl font-bold text-gray-800 mb-6">
+              Terminos y Condiciones
+            </h1>
+
+            <div className="prose prose-gray max-w-none max-h-80 overflow-y-auto pr-2">
+              <section className="mb-4">
+                <h2 className="text-lg font-semibold text-gray-700 mb-2">
+                  1. Proposito del Cuestionario
+                </h2>
+                <p className="text-gray-600 text-sm">
+                  Este cuestionario tiene como proposito recopilar informacion para
+                  fines de evaluacion. Sus respuestas seran tratadas de manera
+                  confidencial.
+                </p>
+              </section>
+
+              <section className="mb-4">
+                <h2 className="text-lg font-semibold text-gray-700 mb-2">
+                  2. Uso de Datos
+                </h2>
+                <p className="text-gray-600 text-sm">
+                  La informacion recopilada sera utilizada unicamente para los fines
+                  especificados. No compartiremos sus datos personales con terceros
+                  sin su consentimiento explicito.
+                </p>
+              </section>
+
+              <section className="mb-4">
+                <h2 className="text-lg font-semibold text-gray-700 mb-2">
+                  3. Confidencialidad
+                </h2>
+                <p className="text-gray-600 text-sm">
+                  Nos comprometemos a mantener la confidencialidad de sus
+                  respuestas. Los datos seran almacenados de forma segura y solo
+                  seran accesibles por personal autorizado.
+                </p>
+              </section>
+
+              <section className="mb-4">
+                <h2 className="text-lg font-semibold text-gray-700 mb-2">
+                  4. Participacion Voluntaria
+                </h2>
+                <p className="text-gray-600 text-sm">
+                  Su participacion en este cuestionario es completamente voluntaria.
+                  Puede optar por no responder cualquier pregunta o abandonar el
+                  cuestionario en cualquier momento.
+                </p>
+              </section>
+
+              <section className="mb-4">
+                <h2 className="text-lg font-semibold text-gray-700 mb-2">
+                  5. Contacto
+                </h2>
+                <p className="text-gray-600 text-sm">
+                  Si tiene preguntas sobre estos terminos o sobre el uso de sus
+                  datos, puede contactar al administrador del cuestionario.
+                </p>
+              </section>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-gray-200 flex gap-3">
+              <Button
+                onClick={() => setScreenState('welcome')}
+                variant="secondary"
+                size="lg"
+              >
+                Volver
+              </Button>
+              <Button
+                onClick={handleAcceptTerms}
+                variant="primary"
+                size="lg"
+                fullWidth
+              >
+                Acepto los terminos
+              </Button>
+            </div>
           </motion.div>
         </Card>
       </div>

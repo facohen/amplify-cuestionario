@@ -6,10 +6,11 @@ export async function submitResponse(
   tokenId: string,
   cuestionario: Cuestionario,
   respondent?: RespondentInfo | null,
-  administrator?: AdministratorInfo | null
+  administrator?: AdministratorInfo | null,
+  abandonedAtQuestion?: number
 ): Promise<string> {
   try {
-    const responseId = await submitToDynamoDB(response, tokenId, cuestionario, respondent, administrator);
+    const responseId = await submitToDynamoDB(response, tokenId, cuestionario, respondent, administrator, abandonedAtQuestion);
     console.log('Response submitted successfully to DynamoDB, id:', responseId);
     return responseId;
   } catch (error) {

@@ -7,7 +7,7 @@ interface UseSubmitResponseReturn {
   isSubmitting: boolean;
   isSuccess: boolean;
   error: string | null;
-  submitResponse: (response: CuestionarioResponse, tokenId: string, cuestionario: Cuestionario, respondent?: RespondentInfo | null, administrator?: AdministratorInfo | null) => Promise<string | null>;
+  submitResponse: (response: CuestionarioResponse, tokenId: string, cuestionario: Cuestionario, respondent?: RespondentInfo | null, administrator?: AdministratorInfo | null, abandonedAtQuestion?: number) => Promise<string | null>;
   reset: () => void;
 }
 
@@ -17,12 +17,12 @@ export function useSubmitResponse(): UseSubmitResponseReturn {
   const [error, setError] = useState<string | null>(null);
 
   const submitResponse = useCallback(
-    async (response: CuestionarioResponse, tokenId: string, cuestionario: Cuestionario, respondent?: RespondentInfo | null, administrator?: AdministratorInfo | null): Promise<string | null> => {
+    async (response: CuestionarioResponse, tokenId: string, cuestionario: Cuestionario, respondent?: RespondentInfo | null, administrator?: AdministratorInfo | null, abandonedAtQuestion?: number): Promise<string | null> => {
       try {
         setIsSubmitting(true);
         setError(null);
 
-        const responseId = await submitToBackend(response, tokenId, cuestionario, respondent, administrator);
+        const responseId = await submitToBackend(response, tokenId, cuestionario, respondent, administrator, abandonedAtQuestion);
 
         setIsSuccess(true);
         return responseId;

@@ -270,9 +270,10 @@ export async function submitResponse(
   tokenId: string,
   cuestionario: Cuestionario,
   respondent?: RespondentInfo | null,
-  administrator?: AdministratorInfo | null
+  administrator?: AdministratorInfo | null,
+  abandonedAtQuestion?: number
 ): Promise<string> {
-  console.log('submitResponse called:', { tokenId, cuestionarioId: cuestionario.id_cuestionario });
+  console.log('submitResponse called:', { tokenId, cuestionarioId: cuestionario.id_cuestionario, abandonedAtQuestion });
 
   const enrichedAnswers = enrichAnswers(response.answers, cuestionario);
   console.log('Enriched answers count:', enrichedAnswers.length);
@@ -280,6 +281,8 @@ export async function submitResponse(
 
   const totalPopupTime = enrichedAnswers.filter((a) => a.had_badge_popup).length * BADGE_POPUP_DURATION_MS;
   const totalTimeAdjusted = Math.max(0, response.total_time_ms - totalPopupTime);
+
+  const isAbandoned = abandonedAtQuestion !== undefined;
 
   // Incluir todos los campos - el schema en producción debe estar actualizado
   // Si hay campos faltantes, hacer deploy del schema
@@ -293,7 +296,7 @@ export async function submitResponse(
     totalTimeMs: response.total_time_ms,
     totalTimeAdjustedMs: totalTimeAdjusted,
     answersJson: JSON.stringify(enrichedAnswers),
-    status: 'completed' as const,
+    status: isAbandoned ? 'abandoned' as const : 'completed' as const,
     downloadStatus: 'pending' as const,
     // Datos del respondente (para carga asistida)
     respondentName: respondent?.name || null,
@@ -302,6 +305,8 @@ export async function submitResponse(
     // Datos del administrador
     administeredBy: administrator?.name || null,
     administeredByEmail: administrator?.email || null,
+    // Datos de abandono
+    abandonedAtQuestion: abandonedAtQuestion || null,
   };
 
   console.log('Creating CuestionarioResponse with payload:', {
