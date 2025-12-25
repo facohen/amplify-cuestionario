@@ -122,18 +122,30 @@ def check_rate_limit(api_key):
 # ============ Route Handlers ============
 
 def list_pending_responses():
-    """List responses with downloadStatus = pending"""
+    """List responses with downloadStatus = pending using GSI"""
     table_name = os.environ.get('CUESTIONARIO_RESPONSE_TABLE_NAME')
     if not table_name:
         return response(500, {'error': 'Configuration error'})
 
     table = dynamodb.Table(table_name)
 
-    # Use scan with filter (GSI query would be more efficient if available)
-    result = table.scan(
-        FilterExpression='downloadStatus = :status',
-        ExpressionAttributeValues={':status': 'pending'}
-    )
+    # Use GSI for efficient query instead of scan
+    # GSI name follows Amplify Gen 2 convention: {model}ByDownloadStatus
+    gsi_name = os.environ.get('DOWNLOAD_STATUS_GSI_NAME', 'CuestionarioResponseByDownloadStatus')
+
+    try:
+        result = table.query(
+            IndexName=gsi_name,
+            KeyConditionExpression='downloadStatus = :status',
+            ExpressionAttributeValues={':status': 'pending'}
+        )
+    except Exception as e:
+        # Fallback to scan if GSI doesn't exist
+        log('WARN', 'GSI query failed, falling back to scan', error=str(e), gsi=gsi_name)
+        result = table.scan(
+            FilterExpression='downloadStatus = :status',
+            ExpressionAttributeValues={':status': 'pending'}
+        )
 
     # Map to external format
     responses_list = []

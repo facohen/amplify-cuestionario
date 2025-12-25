@@ -43,6 +43,16 @@ export interface StoredResponseData {
   downloadedBy: string | null;
   createdAt: string;
   updatedAt: string;
+  // Datos del respondente (para carga asistida)
+  respondentName: string | null;
+  respondentEmail: string | null;
+  respondentCuil: string | null;
+}
+
+export interface RespondentInfo {
+  name: string;
+  email: string;
+  cuil: string;
 }
 
 // ============ HELPERS ============
@@ -229,7 +239,8 @@ function enrichAnswers(answers: AnswerMetrics[], cuestionario: Cuestionario): En
 export async function submitResponse(
   response: CuestionarioResponse,
   tokenId: string,
-  cuestionario: Cuestionario
+  cuestionario: Cuestionario,
+  respondent?: RespondentInfo | null
 ): Promise<string> {
   console.log('submitResponse called:', { tokenId, cuestionarioId: cuestionario.id_cuestionario });
 
@@ -254,6 +265,10 @@ export async function submitResponse(
     answersJson: JSON.stringify(enrichedAnswers),
     status: 'completed' as const,
     downloadStatus: 'pending' as const,
+    // Datos del respondente (para carga asistida)
+    respondentName: respondent?.name || null,
+    respondentEmail: respondent?.email || null,
+    respondentCuil: respondent?.cuil || null,
   };
 
   console.log('Creating CuestionarioResponse with payload:', {
@@ -282,6 +297,8 @@ export async function listResponses(cuestionarioId?: string): Promise<StoredResp
 
   try {
     // Usar authClient porque read de responses requiere autenticación
+    // Nota: El GSI está definido en el schema pero Amplify Gen 2 usa filtros
+    // La Lambda API sí usa el GSI directamente en DynamoDB
     const result = cuestionarioId
       ? await authClient.models.CuestionarioResponse.list({
           filter: { cuestionarioId: { eq: cuestionarioId } },
@@ -315,6 +332,9 @@ export async function listResponses(cuestionarioId?: string): Promise<StoredResp
       downloadedBy: item.downloadedBy || null,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
+      respondentName: item.respondentName || null,
+      respondentEmail: item.respondentEmail || null,
+      respondentCuil: item.respondentCuil || null,
     }));
   } catch (error) {
     console.error('Exception in listResponses:', error);
@@ -349,6 +369,9 @@ export async function getResponse(id: string): Promise<StoredResponseData | null
     downloadedBy: item.downloadedBy || null,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
+    respondentName: item.respondentName || null,
+    respondentEmail: item.respondentEmail || null,
+    respondentCuil: item.respondentCuil || null,
   };
 }
 
@@ -441,6 +464,7 @@ export async function submitAbandonedResponse(data: AbandonedResponseData): Prom
 
 export async function listPendingResponses(): Promise<StoredResponseData[]> {
   // Usar authClient porque read de responses requiere autenticación
+  // Nota: El GSI está definido en el schema, la Lambda API lo usa directamente
   const result = await authClient.models.CuestionarioResponse.list({
     filter: { downloadStatus: { eq: 'pending' } },
   });
@@ -467,5 +491,8 @@ export async function listPendingResponses(): Promise<StoredResponseData[]> {
     downloadedBy: null,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
+    respondentName: item.respondentName || null,
+    respondentEmail: item.respondentEmail || null,
+    respondentCuil: item.respondentCuil || null,
   }));
 }

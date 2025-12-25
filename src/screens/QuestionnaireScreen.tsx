@@ -5,7 +5,8 @@ import { Cuestionario, AnswerMetrics, CuestionarioResponse } from '../types/cues
 import { useToken } from '../hooks/useToken';
 import { useGameProgress } from '../hooks/useGameProgress';
 import { useSubmitResponse } from '../hooks/useSubmitResponse';
-import { getActiveCuestionario, submitAbandonedResponse } from '../services/cuestionarioService';
+import { getActiveCuestionario, submitAbandonedResponse, RespondentInfo } from '../services/cuestionarioService';
+import { getTokenById } from '../services/tokenService';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import ProgressBar from '../components/ui/ProgressBar';
@@ -20,7 +21,11 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
-export default function QuestionnaireScreen() {
+interface QuestionnaireScreenProps {
+  assistedMode?: boolean;
+}
+
+export default function QuestionnaireScreen({ assistedMode = false }: QuestionnaireScreenProps) {
   const { token: tokenId } = useParams<{ token: string }>();
   const navigate = useNavigate();
 
@@ -39,6 +44,9 @@ export default function QuestionnaireScreen() {
 
   // Cuestionario data loaded from DynamoDB
   const [cuestionarioData, setCuestionarioData] = useState<Cuestionario | null>(null);
+
+  // Respondent data (for assisted mode)
+  const [respondentData, setRespondentData] = useState<RespondentInfo | null>(null);
 
   // Questionnaire state
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -99,6 +107,37 @@ export default function QuestionnaireScreen() {
   // Handle token validation result and load the ACTIVE cuestionario
   useEffect(() => {
     async function loadCuestionario() {
+      // En modo asistido, el token acaba de ser creado, no necesitamos validarlo
+      if (assistedMode && tokenId) {
+        try {
+          // Cargar datos del token para obtener info del respondente
+          const tokenData = await getTokenById(tokenId);
+          if (tokenData?.respondentName) {
+            setRespondentData({
+              name: tokenData.respondentName,
+              email: tokenData.respondentEmail || '',
+              cuil: tokenData.respondentCuil || '',
+            });
+          }
+
+          // Cargar cuestionario activo
+          const data = await getActiveCuestionario();
+          if (data) {
+            setCuestionarioData(data);
+            // En modo asistido, saltar directamente al cuestionario
+            setScreenState('welcome');
+          } else {
+            console.error('No active cuestionario found');
+            navigate('/admin?error=no_active');
+          }
+        } catch (error) {
+          console.error('Error loading cuestionario:', error);
+          navigate('/admin?error=load_error');
+        }
+        return;
+      }
+
+      // Modo normal: validar token
       if (!tokenLoading && isValid && token) {
         try {
           // Always load the currently active cuestionario, not the one stored in token
@@ -115,7 +154,7 @@ export default function QuestionnaireScreen() {
           console.error('Error loading cuestionario:', error);
           navigate('/invalid?reason=error');
         }
-      } else if (!tokenLoading && !isValid) {
+      } else if (!tokenLoading && !isValid && !assistedMode) {
         // Redirect to invalid token page with reason
         const reason = tokenError?.includes('utilizado')
           ? 'used'
@@ -129,7 +168,7 @@ export default function QuestionnaireScreen() {
     }
 
     loadCuestionario();
-  }, [tokenLoading, isValid, token, tokenError, navigate]);
+  }, [tokenLoading, isValid, token, tokenError, navigate, assistedMode, tokenId]);
 
   // Reset question tracking when question changes
   useEffect(() => {
@@ -199,23 +238,33 @@ export default function QuestionnaireScreen() {
     try {
       // Limpiar localStorage antes de enviar - el cuestionario se completó
       localStorage.removeItem('abandoned_questionnaire');
-      await submitResponse(response, tokenId!, cuestionarioData);
+      await submitResponse(response, tokenId!, cuestionarioData, respondentData);
       await markAsUsed();
-      navigate('/completed', {
-        state: {
-          totalTime,
-          totalQuestions: cuestionarioData.total_questions,
-        },
-      });
+
+      // En modo asistido, volver al admin con mensaje de éxito
+      if (assistedMode) {
+        navigate('/admin?completed=true');
+      } else {
+        navigate('/completed', {
+          state: {
+            totalTime,
+            totalQuestions: cuestionarioData.total_questions,
+          },
+        });
+      }
     } catch (error) {
       console.error('Error completing questionnaire:', error);
-      // Still navigate to completed even if DynamoDB fails
-      navigate('/completed', {
-        state: {
-          totalTime,
-          totalQuestions: cuestionarioData.total_questions,
-        },
-      });
+      // Still navigate even if DynamoDB fails
+      if (assistedMode) {
+        navigate('/admin?completed=true');
+      } else {
+        navigate('/completed', {
+          state: {
+            totalTime,
+            totalQuestions: cuestionarioData.total_questions,
+          },
+        });
+      }
     }
   }
 

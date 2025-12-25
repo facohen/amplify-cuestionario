@@ -1,6 +1,7 @@
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
-import { Token, TokenValidationResult } from '../types/token';
+import { Token, TokenValidationResult, RespondentData } from '../types/token';
+import { withGraphQLRetry } from '../utils/retry';
 
 // Cliente para operaciones autenticadas (admin)
 const authClient = generateClient<Schema>({ authMode: 'userPool' });
@@ -8,9 +9,14 @@ const authClient = generateClient<Schema>({ authMode: 'userPool' });
 // Cliente para operaciones públicas (validación de token)
 const publicClient = generateClient<Schema>({ authMode: 'apiKey' });
 
+// Batch size for parallel token creation (avoid overwhelming the API)
+const BATCH_SIZE = 10;
+
 export async function validateToken(tokenId: string): Promise<TokenValidationResult> {
   try {
-    const { data: token, errors } = await publicClient.models.Token.get({ id: tokenId });
+    const { data: token, errors } = await withGraphQLRetry(() =>
+      publicClient.models.Token.get({ id: tokenId })
+    );
 
     if (errors || !token) {
       return {
@@ -61,38 +67,77 @@ export async function validateToken(tokenId: string): Promise<TokenValidationRes
 }
 
 export async function markTokenAsUsed(tokenId: string): Promise<void> {
-  try {
-    await publicClient.models.Token.update({
+  await withGraphQLRetry(async () => {
+    const result = await publicClient.models.Token.update({
       id: tokenId,
       status: 'used',
       usedAt: new Date().toISOString(),
     });
-  } catch (error) {
-    console.error('Error marking token as used:', error);
-    throw error;
-  }
+    if (result.errors) {
+      throw new Error(result.errors.map(e => e.message).join(', '));
+    }
+    return result;
+  });
 }
 
 export async function createToken(cuestionarioId: string, expiresAt?: string): Promise<Token> {
-  try {
-    const { data: token, errors } = await authClient.models.Token.create({
+  const { data: token, errors } = await withGraphQLRetry(() =>
+    authClient.models.Token.create({
       cuestionarioId,
       status: 'active',
       expiresAt: expiresAt || null,
-    });
+    })
+  );
 
-    if (errors || !token) {
-      console.error('Create token errors:', errors);
-      throw new Error('Failed to create token');
-    }
-
-    return mapToken(token);
-  } catch (error) {
-    console.error('Error creating token:', error);
-    throw error;
+  if (errors || !token) {
+    console.error('Create token errors:', errors);
+    throw new Error('Failed to create token');
   }
+
+  return mapToken(token);
 }
 
+export async function createAssistedToken(
+  cuestionarioId: string,
+  respondent: RespondentData,
+  createdBy: string
+): Promise<Token> {
+  const { data: token, errors } = await withGraphQLRetry(() =>
+    authClient.models.Token.create({
+      cuestionarioId,
+      status: 'active',
+      respondentName: respondent.name,
+      respondentEmail: respondent.email,
+      respondentCuil: respondent.cuil,
+      isAssistedEntry: true,
+      createdBy,
+    })
+  );
+
+  if (errors || !token) {
+    console.error('Create assisted token errors:', errors);
+    throw new Error('Failed to create assisted token');
+  }
+
+  return mapToken(token);
+}
+
+export async function getTokenById(tokenId: string): Promise<Token | null> {
+  const { data: token, errors } = await withGraphQLRetry(() =>
+    publicClient.models.Token.get({ id: tokenId })
+  );
+
+  if (errors || !token) {
+    return null;
+  }
+
+  return mapToken(token);
+}
+
+/**
+ * Create multiple tokens in parallel batches
+ * Uses Promise.all with batch size to avoid overwhelming the API
+ */
 export async function createTokensBatch(
   cuestionarioId: string,
   count: number,
@@ -100,9 +145,15 @@ export async function createTokensBatch(
 ): Promise<Token[]> {
   const tokens: Token[] = [];
 
-  for (let i = 0; i < count; i++) {
-    const token = await createToken(cuestionarioId, expiresAt);
-    tokens.push(token);
+  // Process in batches of BATCH_SIZE
+  for (let i = 0; i < count; i += BATCH_SIZE) {
+    const batchSize = Math.min(BATCH_SIZE, count - i);
+    const batchPromises = Array.from({ length: batchSize }, () =>
+      createToken(cuestionarioId, expiresAt)
+    );
+
+    const batchResults = await Promise.all(batchPromises);
+    tokens.push(...batchResults);
   }
 
   return tokens;
@@ -111,37 +162,35 @@ export async function createTokensBatch(
 export async function listTokens(
   status?: 'active' | 'used' | 'expired' | 'revoked'
 ): Promise<Token[]> {
-  try {
-    const { data: tokens, errors } = await authClient.models.Token.list();
+  const { data: tokens, errors } = await withGraphQLRetry(() =>
+    authClient.models.Token.list()
+  );
 
-    if (errors) {
-      console.error('List tokens errors:', errors);
-      throw new Error('Failed to list tokens');
-    }
-
-    let result = tokens.map(mapToken);
-
-    if (status) {
-      result = result.filter((t) => t.status === status);
-    }
-
-    return result;
-  } catch (error) {
-    console.error('Error listing tokens:', error);
-    throw error;
+  if (errors) {
+    console.error('List tokens errors:', errors);
+    throw new Error('Failed to list tokens');
   }
+
+  let result = tokens.map(mapToken);
+
+  if (status) {
+    result = result.filter((t) => t.status === status);
+  }
+
+  return result;
 }
 
 export async function revokeToken(tokenId: string): Promise<void> {
-  try {
-    await authClient.models.Token.update({
+  await withGraphQLRetry(async () => {
+    const result = await authClient.models.Token.update({
       id: tokenId,
       status: 'revoked',
     });
-  } catch (error) {
-    console.error('Error revoking token:', error);
-    throw error;
-  }
+    if (result.errors) {
+      throw new Error(result.errors.map(e => e.message).join(', '));
+    }
+    return result;
+  });
 }
 
 // Helper function to map DynamoDB response to Token type
@@ -153,5 +202,10 @@ function mapToken(dbToken: NonNullable<Awaited<ReturnType<typeof publicClient.mo
     expiresAt: dbToken.expiresAt,
     usedAt: dbToken.usedAt,
     status: dbToken.status as Token['status'],
+    respondentName: dbToken.respondentName,
+    respondentEmail: dbToken.respondentEmail,
+    respondentCuil: dbToken.respondentCuil,
+    isAssistedEntry: dbToken.isAssistedEntry,
+    createdBy: dbToken.createdBy,
   };
 }

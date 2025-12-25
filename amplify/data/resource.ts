@@ -8,6 +8,12 @@ const schema = a.schema({
       expiresAt: a.datetime(),
       usedAt: a.datetime(),
       status: a.enum(['active', 'used', 'expired', 'revoked']),
+      // Datos del respondente (para carga asistida)
+      respondentName: a.string(),
+      respondentEmail: a.string(),
+      respondentCuil: a.string(),
+      isAssistedEntry: a.boolean(),
+      createdBy: a.string(),
     })
     .authorization((allow) => [
       allow.publicApiKey().to(['read', 'update']),
@@ -55,6 +61,11 @@ const schema = a.schema({
       downloadStatus: a.enum(['pending', 'downloaded']),
       downloadedAt: a.datetime(),
       downloadedBy: a.string(),
+
+      // Datos del respondente (para carga asistida)
+      respondentName: a.string(),
+      respondentEmail: a.string(),
+      respondentCuil: a.string(),
     })
     .authorization((allow) => [
       allow.publicApiKey().to(['create']),

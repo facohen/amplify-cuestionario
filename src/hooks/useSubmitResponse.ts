@@ -1,12 +1,13 @@
 import { useState, useCallback } from 'react';
 import { CuestionarioResponse, Cuestionario } from '../types/cuestionario';
 import { submitResponse as submitToBackend } from '../services/responseService';
+import { RespondentInfo } from '../services/cuestionarioService';
 
 interface UseSubmitResponseReturn {
   isSubmitting: boolean;
   isSuccess: boolean;
   error: string | null;
-  submitResponse: (response: CuestionarioResponse, tokenId: string, cuestionario: Cuestionario) => Promise<void>;
+  submitResponse: (response: CuestionarioResponse, tokenId: string, cuestionario: Cuestionario, respondent?: RespondentInfo | null) => Promise<void>;
   reset: () => void;
 }
 
@@ -16,12 +17,12 @@ export function useSubmitResponse(): UseSubmitResponseReturn {
   const [error, setError] = useState<string | null>(null);
 
   const submitResponse = useCallback(
-    async (response: CuestionarioResponse, tokenId: string, cuestionario: Cuestionario) => {
+    async (response: CuestionarioResponse, tokenId: string, cuestionario: Cuestionario, respondent?: RespondentInfo | null) => {
       try {
         setIsSubmitting(true);
         setError(null);
 
-        await submitToBackend(response, tokenId, cuestionario);
+        await submitToBackend(response, tokenId, cuestionario, respondent);
 
         setIsSuccess(true);
       } catch (err) {
